@@ -1,7 +1,19 @@
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
+    id 'com.jfrog.bintray'
+    id 'com.github.dcendents.android-maven'
+    id 'org.jetbrains.dokka'
 }
+
+dokka {
+    outputFormat = 'html'
+    outputDirectory = "$buildDir/javadoc"
+}
+
+version = "0.0.2"
+group = 'io.github.wangeason'
+apply from: 'install.gradle'
 
 android {
     compileSdkVersion 30
@@ -11,7 +23,7 @@ android {
         minSdkVersion 17
         targetSdkVersion 30
         versionCode 1
-        versionName "1.0"
+        versionName version
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -31,6 +43,7 @@ android {
         jvmTarget = '1.8'
     }
 }
+
 
 dependencies {
 
