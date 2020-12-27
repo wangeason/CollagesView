@@ -1,4 +1,4 @@
-package io.github.wangeason
+package io.github.wangeason.demo
 
 import android.os.Bundle
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -7,6 +7,7 @@ import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
+import io.github.wangeason.demo.R
 
 class MainActivity : AppCompatActivity() {
 

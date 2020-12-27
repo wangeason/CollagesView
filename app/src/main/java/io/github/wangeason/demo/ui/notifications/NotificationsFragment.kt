@@ -1,4 +1,4 @@
-package io.github.wangeason.ui.notifications
+package io.github.wangeason.demo.ui.notifications
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -8,7 +8,7 @@ import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
-import io.github.wangeason.R
+import io.github.wangeason.demo.R
 
 class NotificationsFragment : Fragment() {
 
