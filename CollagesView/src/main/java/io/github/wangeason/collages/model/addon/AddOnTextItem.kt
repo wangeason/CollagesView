@@ -5,7 +5,7 @@ import android.graphics.Paint.Align
 import android.graphics.Rect
 import android.text.TextPaint
 
-class AddOnTextItem(var text: String) : AddOnItem() {
+class AddOnTextItem(var text: String, index: Int) : AddOnItem(index) {
     var textSize = 16
     private var mOutLineRadius = 0f
     private var mShadowRadius = 0f

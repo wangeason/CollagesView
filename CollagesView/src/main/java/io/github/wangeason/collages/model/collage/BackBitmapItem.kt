@@ -5,6 +5,7 @@ import io.github.wangeason.collages.model.BaseItem
 import io.github.wangeason.collages.polygon.BoundingBox
 import io.github.wangeason.collages.polygon.Polygon
 import java.util.*
+import kotlin.collections.ArrayList
 
 class BackBitmapItem(var bitmap: Bitmap) : BaseItem() {
     private var polygon: Polygon
@@ -25,6 +26,10 @@ class BackBitmapItem(var bitmap: Bitmap) : BaseItem() {
             dragButtons = ArrayList<DragButton>()
         }
         dragButtons!!.add(dragButton)
+    }
+
+    fun clearDragButton() {
+        dragButtons = ArrayList()
     }
 
     fun getPolygon(): Polygon {

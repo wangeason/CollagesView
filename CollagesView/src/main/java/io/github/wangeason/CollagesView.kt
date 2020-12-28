@@ -1,5 +1,6 @@
 package io.github.wangeason
 
+import android.R.attr
 import android.content.Context
 import android.graphics.*
 import android.text.TextPaint
@@ -8,17 +9,19 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import io.github.wangeason.collages.model.BaseItem
-import io.github.wangeason.collages.model.addon.AddOnItem
-import io.github.wangeason.collages.model.addon.AddOnTextItem
-import io.github.wangeason.collages.model.addon.DelButton
-import io.github.wangeason.collages.model.addon.RotateButton
+import io.github.wangeason.collages.model.addon.*
 import io.github.wangeason.collages.model.collage.BackBitmapItem
 import io.github.wangeason.collages.model.collage.DragButton
 import io.github.wangeason.collages.model.collage.PathArcPoints
 import io.github.wangeason.collages.polygon.*
+import io.github.wangeason.collages.polygon.GraphicUtils.getCenterCropMatrix
+import io.github.wangeason.collages.polygon.GraphicUtils.getCenterInsideMatrix
+import io.github.wangeason.collages.polygon.GraphicUtils.getDisPtToPt
+import io.github.wangeason.collages.polygon.GraphicUtils.getShrinkPolygon
 import io.github.wangeason.collages.polygon.Point
-import io.github.wangeason.collages.utils.DensityUtils
+import io.github.wangeason.collages.utils.DensityUtils.dip2px
 import io.github.wangeason.collages.utils.DragPolygonHelper
+
 
 /**
  * TEST
@@ -38,6 +41,7 @@ class CollagesView @JvmOverloads constructor(
      * 图片间默认间隔
      */
     private var pathWidth: Float
+    private var defaultPathWidth = 0f
 
     /**
      * 图片选中标识默认宽度
@@ -60,12 +64,13 @@ class CollagesView @JvmOverloads constructor(
     private var aspectRatio = 1.0f
     private val backBitmapItems: ArrayList<BackBitmapItem?>? = ArrayList<BackBitmapItem?>()
     private val addOnItems: ArrayList<AddOnItem> = ArrayList<AddOnItem>()
-
+    private val toAddFreeBitmaps: ArrayList<Bitmap> = ArrayList()
+    private var isModified = false
     /**
      * 长按响应任务
      */
     private val mStartSwapRunnable: Runnable = Runnable {
-        if (isMode(Mode.BI_START)) {
+        if (this.editMode != EditMode.SINGLE && isMode(Mode.BI_START)) {
             setMode(Mode.BI_SWAP_START)
         } else {
         }
@@ -113,6 +118,9 @@ class CollagesView @JvmOverloads constructor(
      * 两个手指做旋转用
      */
     private var startVector: Vector? = null
+
+    private var blockLayout = false
+    private var tileId = -1
     fun setIsSelectorEnable(selectorEnable: Boolean) {
         isSelectorEnable = selectorEnable
         invalidate()
@@ -121,7 +129,11 @@ class CollagesView @JvmOverloads constructor(
     fun isSelectorEnable(): Boolean {
         return isSelectorEnable
     }
-
+    fun clearAddOn() {
+        addOnItems.clear()
+        setSelectMode(SelectMode.NONE, null)
+        invalidate()
+    }
     private var onBtnClickListener: OnBtnClickListener = io.github.wangeason.collages.listener.OnBtnClickListener()
 
     interface OnBtnClickListener {
@@ -155,7 +167,11 @@ class CollagesView @JvmOverloads constructor(
         fun onBitmapItemDragPolygonEnd(point: Point?, currentBackBitmapItem: BackBitmapItem?)
         fun onBitmapItemSwapStart(point: Point?, currentBackBitmapItem: BackBitmapItem?)
         fun onBitmapItemSwapDragging(point: Point?, currentBackBitmapItem: BackBitmapItem?)
-        fun onBitmapItemSwapDropped(point: Point?, currentBackBitmapItem: BackBitmapItem?)
+        fun onBitmapItemSwapDropped(
+            point: Point?,
+            oriBackBitmapItem: BackBitmapItem?,
+            currentBackBitmapItem: BackBitmapItem?
+        )
         fun onAddOnItemStart(point: Point?, currentBackBitmapItem: AddOnItem?)
         fun onAddOnItemDragging(point: Point?, currentBackBitmapItem: AddOnItem?)
         fun onAddOnItemDragEnd(point: Point?, currentBackBitmapItem: AddOnItem?)
@@ -185,12 +201,18 @@ class CollagesView @JvmOverloads constructor(
     /** 记录是拖拉照片模式还是放大缩小照片模式  */
     private var mode = Mode.INIT // 初始状态
 
-    /** 记录是否选定  */
-    enum class SelectMode {
-        NONE, BACK_BITMAP, ADDON_BITMAP, ADDON_TEXT
-    }
+    private var editMode = EditMode.COLLAGE
+        set(value) {
+            field = value
+            addOnItems.clear()
+            backBitmapItems!!.clear();
+            setSelectMode(SelectMode.NONE, null);
+            requestLayout();
+            invalidate();
+        }
 
     private var selectMode: SelectMode? = null
+    private var oriItem: BaseItem? = null
     private var currentItem: BaseItem? = null
 
     /** 用于记录开始时候的坐标位置  */
@@ -206,12 +228,14 @@ class CollagesView @JvmOverloads constructor(
     private var midPoint: PointF? = null
 
     /** 图片初始位置脚本  */
-    private lateinit var script: Array<IntArray>
+    private var script: Array<Array<Int>>? = null
 
     /**
      * padding 四周都使用paddingLeft,其他三个方向屏蔽
      */
+    private val DEFAULT_PADDING_WIDTH_DP: Int = 6
     private var padding = 0
+    private var defaultPadding = 0f
 
     /**
      * layout
@@ -228,45 +252,108 @@ class CollagesView @JvmOverloads constructor(
     private var linePaint: Paint? = null
     private var dragButtonPaint: Paint? = null
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val heightSpecMode = MeasureSpec.getMode(heightMeasureSpec)
+        Log.i(TAG, "onMeasure")
+
         viewWidth = getDefaultSize(suggestedMinimumWidth, widthMeasureSpec)
         viewHeight = getDefaultSize(suggestedMinimumHeight, heightMeasureSpec)
 
-        //默认设置为比例要求高度
-        if (viewHeight == 0 && heightSpecMode == MeasureSpec.UNSPECIFIED) {
-            viewHeight = (viewWidth / aspectRatio).toInt()
-        }
-        if (aspectRatio != viewWidth.toFloat() / viewHeight.toFloat()) {
-            if (viewWidth / viewHeight.toFloat() > aspectRatio) {
-                viewHeight = (viewHeight * aspectRatio).toInt()
+
+        if (editMode === EditMode.FREE || editMode === EditMode.MAGAZINE) {
+            padding = 0
+            Log.i(TAG + "Free", "viewWidth = $viewWidth viewHeight=$viewHeight")
+            setMeasuredDimension(viewWidth, viewHeight)
+        } else if (editMode === EditMode.SINGLE) {
+            padding = 0
+            val bmpWidth = backBitmapItems!![0]!!.bitmap.width
+            val bmpHeight = backBitmapItems[0]!!.bitmap.height
+            Log.i(TAG + "Single", " bmpWidth=" + bmpWidth + "bmpHeight = " + bmpHeight)
+            if (bmpWidth <= viewWidth && bmpHeight <= viewHeight) {
+                viewWidth = bmpWidth
+                viewHeight = bmpHeight
+            } else {
+                val widthRatio = 1.0f * viewWidth / bmpWidth
+                val heightRatio = 1.0f * viewHeight / bmpHeight
+                if (widthRatio < heightRatio) {
+                    viewHeight = (bmpHeight * widthRatio).toInt()
+                } else {
+                    viewWidth = (bmpWidth * heightRatio).toInt()
+                }
+            }
+            Log.i(TAG + "Single", "viewWidth = $viewWidth viewHeight=$viewHeight")
+            setMeasuredDimension(viewWidth, viewHeight)
+        } else if (editMode === EditMode.COLLAGE) {
+            padding = defaultPadding.toInt()
+            //默认设置为比例要求高度
+            if (viewWidth / aspectRatio > viewHeight) { // 以高为准
+                viewWidth = (viewHeight * aspectRatio).toInt()
             } else {
                 viewHeight = (viewWidth / aspectRatio).toInt()
             }
+            Log.i(TAG + "Collage", "viewWidth = $viewWidth viewHeight=$viewHeight")
+            setMeasuredDimension(viewWidth, viewHeight)
+        } else {
+            padding = 0
+            Log.i(TAG, "viewWidth = $viewWidth viewHeight=$viewHeight")
+            setMeasuredDimension(viewWidth, viewHeight)
         }
-        setMeasuredDimension(viewWidth, viewHeight)
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
 //        super.onLayout(changed, left, top, right, bottom);
-        layout = intArrayOf(left, top, right, bottom)
-        Log.i(
-            TAG,
-            "onLayoutpr LEFT=$left TOP=$top right=$right bottom=$bottom"
-        )
-        if (getBackBitmapCount() < MIN_PICS && getAddOnCount() == 0) {
+//        layout = intArrayOf(left, top, right, bottom)
+//        Log.i(
+//            TAG,
+//            "onLayoutpr LEFT=$left TOP=$top right=$right bottom=$bottom"
+//        )
+//        if (getBackBitmapCount() < MIN_PICS && getAddOnCount() == 0) {
+//            return
+//        }
+//
+//
+//        //padding
+//        padding = paddingLeft
+//
+////        state = START;
+//        setLayerType(LAYER_TYPE_SOFTWARE, null) // 软件加速
+//        prepareForOnDraw()
+//
+//        //若有拼接用的Bitmap
+//        if (getBackBitmapCount() >= MIN_PICS) {
+//            initBackBitmapPolygons()
+//
+//            //被系统自动layout，要初始化bitmapItem的oriMatrix
+//            initBackBitmapMatrix(isAuto) // 缩小图片
+//            if (!isAuto) {
+//                isAuto = true
+//            }
+//            initBackBitmapPath()
+//            initBackBitmapDragButton()
+//        }
+        if (blockLayout) {
+            blockLayout = false
             return
         }
+        layout = intArrayOf(attr.left, attr.top, attr.right, attr.bottom)
+        Log.i(
+            TAG,
+            "onLayout LEFT=" + attr.left + " TOP=" + attr.top + " right=" + attr.right + " bottom=" + attr.bottom
+        )
 
-
-        //padding
-        padding = paddingLeft
-
-//        state = START;
         setLayerType(LAYER_TYPE_SOFTWARE, null) // 软件加速
-        prepareForOnDraw()
 
-        //若有拼接用的Bitmap
-        if (getBackBitmapCount() >= MIN_PICS) {
+
+        if (editMode === EditMode.FREE) {
+            if (toAddFreeBitmaps.size == 0) {
+                return
+            }
+            for (bitmap in toAddFreeBitmaps) {
+                addOnBitmap(bitmap!!)
+            }
+            toAddFreeBitmaps.clear()
+        } else if (editMode === EditMode.SINGLE) {
+            if (getBackBitmapCount() == 0) {
+                return
+            }
             initBackBitmapPolygons()
 
             //被系统自动layout，要初始化bitmapItem的oriMatrix
@@ -276,7 +363,27 @@ class CollagesView @JvmOverloads constructor(
             }
             initBackBitmapPath()
             initBackBitmapDragButton()
+        } else if (editMode === EditMode.COLLAGE) {
+            if (getBackBitmapCount() <= MIN_PICS) {
+                return
+            }
+            initBackBitmapPolygons()
+
+            //被系统自动layout，要初始化bitmapItem的oriMatrix
+            initBackBitmapMatrix(isAuto) // 缩小图片
+            if (!isAuto) {
+                isAuto = true
+            }
+            initBackBitmapPath()
+            initBackBitmapDragButton()
+        } else if (editMode === EditMode.MAGAZINE) {
+            // TODO: 15/11/27
+        } else {
+            return
         }
+
+
+        prepareForOnDraw()
     }
 
     /**
@@ -311,16 +418,37 @@ class CollagesView @JvmOverloads constructor(
     }
 
     private fun initBackBitmapDragButton() {
-        val border1 = Segment(Point(0f + padding, 0f + padding), Point(width.toFloat() - padding, 0f + padding))
+        val border1 = Segment(
+            Point(0f + padding, 0f + padding), Point(
+                width.toFloat() - padding,
+                0f + padding
+            )
+        )
         val border2 =
-            Segment(Point(width.toFloat() - padding, 0f + padding), Point(width.toFloat() - padding, height.toFloat() - padding))
+            Segment(
+                Point(width.toFloat() - padding, 0f + padding), Point(
+                    width.toFloat() - padding,
+                    height.toFloat() - padding
+                )
+            )
         val border3 =
-            Segment(Point(width.toFloat() - padding, height.toFloat() - padding), Point(0f + padding, height.toFloat() - padding))
-        val border4 = Segment(Point(0f + padding, height.toFloat() - padding), Point(0f + padding, 0f + padding))
+            Segment(
+                Point(width.toFloat() - padding, height.toFloat() - padding), Point(
+                    0f + padding,
+                    height.toFloat() - padding
+                )
+            )
+        val border4 = Segment(
+            Point(0f + padding, height.toFloat() - padding), Point(
+                0f + padding,
+                0f + padding
+            )
+        )
 
         //CalcDraggableSides
         for (backBitmapItem: BackBitmapItem? in backBitmapItems!!) {
-            for (index in 0 until backBitmapItem!!.getPolygon().sides.size) {
+            backBitmapItem!!.clearDragButton()
+            for (index in 0 until backBitmapItem.getPolygon().sides.size) {
                 if (!GraphicUtils.isSegmentsOnSameLine(
                         backBitmapItem.getPolygon().sides.get(index), border1
                     )
@@ -364,10 +492,10 @@ class CollagesView @JvmOverloads constructor(
         if (script == null) {
             polygons = getBackBitmapPolygons(
                 DEFAULT_POSITION[getBackBitmapCount()],
-                width, height, padding
+                measuredWidth, measuredHeight, padding
             )
         } else {
-            polygons = getBackBitmapPolygons(script!!, width, height, padding)
+            polygons = getBackBitmapPolygons(script!!, measuredWidth, measuredHeight, padding)
         }
 
         //只有重新加载脚本以后才需要找活动边界，拖拉活动边界的时候，只需要重新调用setPolygons,再refresh
@@ -401,7 +529,7 @@ class CollagesView @JvmOverloads constructor(
      * @return
      */
     private fun getBackBitmapPolygons(
-        script: Array<IntArray>,
+        script: Array<Array<Int>>,
         viewWidth: Int,
         viewHeight: Int,
         padding: Int
@@ -429,6 +557,7 @@ class CollagesView @JvmOverloads constructor(
 
     // 初始化矩阵并缩放图片匹配polygon boundingbox
     private fun initBackBitmapMatrix(isPostMatrixReset: Boolean) {
+        Log.i(TAG, "initBackBitmapMatrix");
         for (backBitmapItem: BackBitmapItem? in backBitmapItems!!) {
             //默认CenterCrop
             if (backBitmapItem!!.isCenterInside) {
@@ -452,6 +581,13 @@ class CollagesView @JvmOverloads constructor(
                 backBitmapItem.isCenterCrop = true
                 backBitmapItem.isCenterInside = false
             }
+            Log.i(
+                TAG,
+                "Center Crop boundingBox = " + backBitmapItem.getPolygon().boundingBox.toString()
+            );
+            Log.i(TAG, backBitmapItem.oriMatrix.toString());
+            Log.i(TAG, backBitmapItem.postMatrix.toString());
+
             if (isPostMatrixReset) {
                 backBitmapItem.postMatrix.reset()
             }
@@ -460,15 +596,15 @@ class CollagesView @JvmOverloads constructor(
 
     // 画好矩阵模块
     private fun initBackBitmapPath() {
-        for (backBitmapItem: BackBitmapItem? in backBitmapItems!!) {
+        for (backBitmapItem in backBitmapItems!!) {
+            backBitmapItem!!.drawingPolygon =
+                getShrinkPolygon(backBitmapItem.getPolygon(), pathWidth / 2)
+        }
+        val cutLength = getSideCutLength()
+
+        for (backBitmapItem: BackBitmapItem? in backBitmapItems) {
             val path = Path()
-            backBitmapItem!!.drawingPolygon = (
-                GraphicUtils.getShrinkPolygon(
-                    backBitmapItem.getPolygon(),
-                    pathWidth / 2
-                )
-            )
-            val vertexes: ArrayList<Point> = backBitmapItem.drawingPolygon.vertexes
+            val vertexes: ArrayList<Point> = backBitmapItem!!.drawingPolygon.vertexes
             backBitmapItem.drawingVertexes = (vertexes)
             if (getSideCutRatio() == 0f) {
                 path.moveTo(vertexes[0].x, vertexes[0].y)
@@ -480,9 +616,10 @@ class CollagesView @JvmOverloads constructor(
                 val centers: ArrayList<PathArcPoints> = ArrayList<PathArcPoints>()
                 GraphicUtils.getPathArcCenter(
                     backBitmapItem.drawingPolygon,
-                    getSideCutLength(),
+                    cutLength,
                     centers
                 )
+
                 val size = centers.size
                 path.moveTo(centers[0].getStartPoint().x, centers[0].getStartPoint().y)
                 for (i in 0 until size) {
@@ -490,8 +627,8 @@ class CollagesView @JvmOverloads constructor(
                     val nextArc: PathArcPoints = centers[(i + 1 + size) % size]
                     path.arcTo(
                         thisArc.rectF,
-                            (thisArc.startAngle * 180 / Math.PI).toFloat(),
-                            (thisArc.sweepAngle * 180 / Math.PI).toFloat()
+                        (thisArc.startAngle * 180 / Math.PI).toFloat(),
+                        (thisArc.sweepAngle * 180 / Math.PI).toFloat()
                     )
                     path.lineTo(nextArc.getStartPoint().x, nextArc.getStartPoint().y)
                 }
@@ -511,19 +648,31 @@ class CollagesView @JvmOverloads constructor(
             backBitmapItem.path = path
         }
     }
-
+    fun setTileBackgroudRes(drawableId: Int) {
+        tileId = drawableId
+        invalidate()
+    }
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        if (getBackBitmapCount() >= MIN_PICS) {
-            // 设置抗锯齿
-            canvas.drawFilter = pfd
-            for (backBitmapItem: BackBitmapItem? in backBitmapItems!!) {
-                canvas.save()
-                canvas.clipPath(backBitmapItem!!.path)
-                canvas.drawBitmap(backBitmapItem.bitmap, backBitmapItem.matrix, paint)
-                canvas.restore()
-            }
+        if (tileId != -1) {
+            val paint = Paint()
+            paint.shader = BitmapShader(
+                BitmapFactory.decodeResource(resources, tileId),
+                Shader.TileMode.REPEAT,
+                Shader.TileMode.REPEAT
+            )
+            canvas.drawPaint(paint)
         }
+        super.onDraw(canvas)
+
+        // 设置抗锯齿
+        canvas.drawFilter = pfd
+        for (backBitmapItem in backBitmapItems!!) {
+            canvas.save()
+            canvas.clipPath(backBitmapItem!!.path)
+            canvas.drawBitmap(backBitmapItem.bitmap, backBitmapItem.matrix, paint)
+            canvas.restore()
+        }
+
         if (getAddOnCount() > 0) {
             for (item: AddOnItem in addOnItems) {
                 if (item is AddOnTextItem) {
@@ -590,23 +739,22 @@ class CollagesView @JvmOverloads constructor(
                 canvas.drawPath(addOnItem.path, (linePaint)!!)
                 canvas.restore()
                 if (!(isMode(Mode.AO_DRAGGING) || isMode(Mode.AO_ZOOM_START) || isMode(Mode.AO_ZOOMING))) {
-                    canvas.drawCircle(
-                        addOnItem.delButton.center.x,
-                        addOnItem.delButton.center.y,
-                        dragBtnRadius * 2,
-                        (dragButtonPaint)!!
-                    )
-                    canvas.drawCircle(
-                        addOnItem.rotateButton.center.x,
-                        addOnItem.rotateButton.center.y,
-                        dragBtnRadius * 2,
-                        (dragButtonPaint)!!
-                    )
+                    drawButton(canvas, addOnItem.delButton);
+                    drawButton(canvas, addOnItem.flipButton);
+                    drawButton(canvas, addOnItem.rotateButton);
                 }
             }
         } else {
             //Do Nothing
         }
+    }
+
+    private fun drawButton(canvas: Canvas, btn: CornerButton) {
+        val radius = (dragBtnRadius * 2).toInt()
+        if (btn.drawable == null) {
+            btn.setDrawable(context.getResources().getDrawable(btn.resId), radius)
+        }
+        btn.drawable!!.draw(canvas)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -624,10 +772,10 @@ class CollagesView @JvmOverloads constructor(
                     )
 
                     //优先处理DragButton事件 和 AddOn的菜单事件
-                    if (isSelectMode(SelectMode.BACK_BITMAP)) {
+                    if (editMode != EditMode.SINGLE && isSelectMode(SelectMode.BACK_BITMAP)) {
                         //优先检查拖拉按钮
                         val dragButton: DragButton? = onWhichDragButton(
-                                (currentItem as BackBitmapItem?)!!.getDragButtons()!!,
+                            (currentItem as BackBitmapItem?)!!.getDragButtons()!!,
                             startPoint
                         )
                         //点击在dragButton上
@@ -652,6 +800,9 @@ class CollagesView @JvmOverloads constructor(
                             (currentItem as AddOnItem?)!!.rotateButton,
                             startPoint
                         )
+                        val flipButton: FlipButton? =
+                            onWhichFlipButton((currentItem as AddOnItem).flipButton, startPoint)
+
                         if (delBtn != null) {
                             onBtnClickListener.onDelBtnClicked(
                                 getContext(),
@@ -670,6 +821,11 @@ class CollagesView @JvmOverloads constructor(
                             )
 
                             invalidate() // 重绘
+                            return true
+                        }
+                        if (flipButton != null) {
+                            (currentItem as AddOnItem).flipBitmap()
+                            invalidate()
                             return true
                         }
                     }
@@ -704,8 +860,10 @@ class CollagesView @JvmOverloads constructor(
                         }
                         i--
                     }
-                    if (foundAddOn) {
-
+                    if (editMode == EditMode.SINGLE || editMode == EditMode.FREE) {
+                        if (!foundAddOn) {
+                            setSelectMode(SelectMode.NONE, null);
+                        }
                         invalidate() // 重绘
                         return true
                     }
@@ -731,23 +889,23 @@ class CollagesView @JvmOverloads constructor(
                                     )
                                     if (backBitmapItem.isCenterCrop) {
                                         backBitmapItem.oriMatrix = (
-                                            GraphicUtils.getCenterInsideMatrix(
-                                                backBitmapItem.getPolygon().boundingBox,
-                                                backBitmapItem.bitmap,
-                                                pathWidth
-                                            )
-                                        )
+                                                GraphicUtils.getCenterInsideMatrix(
+                                                    backBitmapItem.getPolygon().boundingBox,
+                                                    backBitmapItem.bitmap,
+                                                    pathWidth
+                                                )
+                                                )
                                         backBitmapItem.postMatrix = Matrix()
                                         backBitmapItem.isCenterInside = true
                                         backBitmapItem.isCenterCrop = false
                                     } else {
                                         backBitmapItem.oriMatrix = (
-                                            GraphicUtils.getCenterCropMatrix(
-                                                backBitmapItem.getPolygon().boundingBox,
-                                                backBitmapItem.bitmap,
-                                                pathWidth
-                                            )
-                                        )
+                                                GraphicUtils.getCenterCropMatrix(
+                                                    backBitmapItem.getPolygon().boundingBox,
+                                                    backBitmapItem.bitmap,
+                                                    pathWidth
+                                                )
+                                                )
                                         backBitmapItem.postMatrix = (Matrix())
                                         backBitmapItem.isCenterInside = (false)
                                         backBitmapItem.isCenterCrop = (true)
@@ -861,7 +1019,8 @@ class CollagesView @JvmOverloads constructor(
                                 // 两个手指并拢在一起的时候素大于10
                                 var scale: Float = endVector.length() / startVector!!.length()
                                 val acos: Double =
-                                    endVector.scalar(startVector!!) / endVector.length() / startVector!!.length().toDouble()
+                                    endVector.scalar(startVector!!) / endVector.length() / startVector!!.length()
+                                        .toDouble()
                                 if (acos > 1 || acos < -1) {
 
                                     invalidate() // 重绘
@@ -912,10 +1071,14 @@ class CollagesView @JvmOverloads constructor(
                             Mode.BI_SWAP_START
                         )
                     ) {
+                        oriItem = currentItem
+                        currentItem = getEventBitmapItem(event)
                         setMode(Mode.BI_SWAP_DROPPED)
-                        val backBitmapItem: BackBitmapItem? = getEventBitmapItem(event)
-                        if ((backBitmapItem != null) && (currentItem != null) && (backBitmapItem !== currentItem)) {
-                            swapBitmap(backBitmapItem, (currentItem as BackBitmapItem?)!!)
+                        if (oriItem != null && currentItem != null && oriItem !== currentItem) {
+                            swapBitmap(
+                                (oriItem as BackBitmapItem?)!!,
+                                (currentItem as BackBitmapItem?)!!
+                            )
                         }
                     } else if (isMode(Mode.BI_START)) {
                         if (!isSelectMode(SelectMode.NONE) && isCancelable) {
@@ -977,7 +1140,15 @@ class CollagesView @JvmOverloads constructor(
         addOnItems.remove(addOnItem)
         addOnItems.add(0, addOnItem)
     }
-
+    private fun onWhichFlipButton(flipButton: FlipButton, startPoint: PointF): FlipButton? {
+        return if (getDisPtToPt(
+                flipButton.center,
+                Point(startPoint.x, startPoint.y)
+            ) < dragBtnRadius * 3
+        ) {
+            flipButton
+        } else null
+    }
     private fun onWhichRotateButton(rotateButton: RotateButton, startPoint: PointF): RotateButton? {
         return if (GraphicUtils.getDisPtToPt(
                 rotateButton.center,
@@ -1090,74 +1261,126 @@ class CollagesView @JvmOverloads constructor(
                 touchPoint,
                 currentItem as BackBitmapItem?
             )
-            Mode.BI_DRAGGING -> mModeChangeListener.onBitmapItemDragging(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_DRAG_END -> mModeChangeListener.onBitmapItemDragEnd(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_ZOOM_START -> mModeChangeListener.onBitmapItemZoomStart(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_ZOOMING -> mModeChangeListener.onBitmapItemZoomingImg(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_ZOOM_END -> mModeChangeListener.onBitmapItemZoomEnd(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_DRAG_POLYGON_START -> mModeChangeListener.onBitmapItemDragPolygonStart(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_DRAGGING_POLYGON -> mModeChangeListener.onBitmapItemDraggingPolygon(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_DRAG_POLYGON_END -> mModeChangeListener.onBitmapItemDragPolygonEnd(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_SWAP_START -> mModeChangeListener.onBitmapItemSwapStart(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_SWAP_DRAGGING -> mModeChangeListener.onBitmapItemSwapDragging(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.BI_SWAP_DROPPED -> mModeChangeListener.onBitmapItemSwapDropped(
-                touchPoint,
-                currentItem as BackBitmapItem?
-            )
-            Mode.AO_START -> mModeChangeListener.onAddOnItemStart(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
-            Mode.AO_DRAGGING -> mModeChangeListener.onAddOnItemDragging(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
-            Mode.AO_DRAG_END -> mModeChangeListener.onAddOnItemDragEnd(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
-            Mode.AO_ZOOM_START -> mModeChangeListener.onAddOnItemZoomStart(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
-            Mode.AO_ZOOMING -> mModeChangeListener.onAddOnItemZoomingImg(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
-            Mode.AO_ZOOM_END -> mModeChangeListener.onAddOnItemZoomEnd(
-                touchPoint,
-                currentItem as AddOnItem?
-            )
+            Mode.BI_DRAGGING -> {
+                isModified = true
+                mModeChangeListener.onBitmapItemDragging(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_DRAG_END -> {
+                isModified = true
+                mModeChangeListener.onBitmapItemDragEnd(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_ZOOM_START -> {
+                isModified = true
+                mModeChangeListener.onBitmapItemZoomStart(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_ZOOMING -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemZoomingImg(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_ZOOM_END -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemZoomEnd(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_DRAG_POLYGON_START -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemDragPolygonStart(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_DRAGGING_POLYGON -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemDraggingPolygon(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_DRAG_POLYGON_END -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemDragPolygonEnd(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_SWAP_START -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemSwapStart(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_SWAP_DRAGGING -> {
+                isModified = true;
+                mModeChangeListener.onBitmapItemSwapDragging(
+                    touchPoint,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.BI_SWAP_DROPPED -> {
+                isModified = true
+                mModeChangeListener.onBitmapItemSwapDropped(
+                    touchPoint,
+                    oriItem as BackBitmapItem?,
+                    currentItem as BackBitmapItem?
+                )
+            }
+            Mode.AO_START -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemStart(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
+            Mode.AO_DRAGGING -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemDragging(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
+            Mode.AO_DRAG_END -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemDragEnd(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
+            Mode.AO_ZOOM_START -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemZoomStart(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
+            Mode.AO_ZOOMING -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemZoomingImg(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
+            Mode.AO_ZOOM_END -> {
+                isModified = true
+                mModeChangeListener.onAddOnItemZoomEnd(
+                    touchPoint,
+                    currentItem as AddOnItem?
+                )
+            }
         }
     }
 
@@ -1202,19 +1425,42 @@ class CollagesView @JvmOverloads constructor(
      * 设置图片队列
      * @param bitmaps
      */
-    fun setImageBitmaps(bitmaps: ArrayList<Bitmap?>) {
-        if (bitmaps.size < 1) {
-            throw IllegalArgumentException(
-                ("bitmaps size can not be less than "
-                        + 1)
-            )
-        }
+    fun setImageBitmaps(bitmaps: ArrayList<Bitmap>) {
+        Log.i(TAG, "setImageBitmaps")
         backBitmapItems!!.clear()
-        for (bitmap: Bitmap? in bitmaps) {
-            backBitmapItems.add(BackBitmapItem(bitmap!!))
+        script = null
+        setSelectMode(SelectMode.NONE, null)
+
+        val iterator: MutableIterator<Bitmap?> = bitmaps.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next() == null) {
+                iterator.remove()
+            }
+        }
+        if (editMode === EditMode.FREE || editMode === EditMode.MAGAZINE) {
+            for (bitmap: Bitmap? in bitmaps) {
+                toAddFreeBitmaps.add(bitmap!!)
+            }
+        } else if (editMode === EditMode.SINGLE) {
+            pathWidth = 0f
+            backBitmapItems!!.add(BackBitmapItem(bitmaps[0]))
+        } else if (editMode === EditMode.COLLAGE) {
+            if (bitmaps.size <= MIN_PICS) {
+                throw java.lang.IllegalArgumentException(
+                    "bitmaps size can not be less than "
+                            + 1
+                )
+            }
+            pathWidth = defaultPathWidth
+            for (bitmap: Bitmap? in bitmaps) {
+                backBitmapItems!!.add(BackBitmapItem((bitmap)!!))
+            }
+        } else {
+            for (bitmap: Bitmap? in bitmaps) {
+                backBitmapItems!!.add(BackBitmapItem((bitmap)!!))
+            }
         }
 
-//        state = INIT;
         invalidate()
     }
 
@@ -1222,16 +1468,42 @@ class CollagesView @JvmOverloads constructor(
         return backBitmapItems
     }
 
+    fun onBackItemBitmapChanged(src: Bitmap?, position: Int) {
+        Log.i(TAG, "onBackItemBitmapChanged")
+        val backBitmapItem = backBitmapItems!![position]!!
+        backBitmapItem.bitmap = src!!
+        if (backBitmapItem.isCenterInside) {
+            backBitmapItem.oriMatrix = getCenterInsideMatrix(
+                backBitmapItem.getPolygon().boundingBox,
+                backBitmapItem.bitmap,
+                pathWidth
+            )
+            backBitmapItem.isCenterCrop = false
+            backBitmapItem.isCenterInside = true
+        } else {
+            backBitmapItem.oriMatrix = getCenterCropMatrix(
+                backBitmapItem.getPolygon().boundingBox,
+                backBitmapItem.bitmap,
+                pathWidth
+            )
+            backBitmapItem.isCenterCrop = true
+            backBitmapItem.isCenterInside = false
+        }
+        backBitmapItem.postMatrix.reset()
+        invalidate()
+    }
+
     /**
      * 设置图片位置
      * @param script
      */
-    fun setPositionScript(script: Array<IntArray>?) {
+    fun setPositionScript(script: Array<Array<Int>>?) {
         this.script = script!!
     }
 
     fun reset() {
 //        state = INIT;
+        Log.i(TAG, "reset");
         initBackBitmapPolygons()
         initBackBitmapMatrix(true) // 缩小图片
         initBackBitmapPath()
@@ -1242,7 +1514,7 @@ class CollagesView @JvmOverloads constructor(
     private val polygonChangeListener: BackBitmapItem.PolygonChangeListener =
         object : BackBitmapItem.PolygonChangeListener {
             override fun onBoundingChanged(src: BackBitmapItem?, newBoundingbox: BoundingBox?) {
-
+                Log.i(TAG, "onBoundingChanged");
                 val oldBound: BoundingBox = src!!.getPolygon().boundingBox
                 var xScale: Float = (newBoundingbox!!.xMax - newBoundingbox!!.xMin) / (oldBound.xMax - oldBound.xMin)
                 var yScale: Float = (newBoundingbox!!.yMax - newBoundingbox!!.yMin) / (oldBound.yMax - oldBound.yMin)
@@ -1256,10 +1528,10 @@ class CollagesView @JvmOverloads constructor(
                 val y = if (yScale > 1 / yScale) yScale else 1 / yScale
                 val scale = if (x > y) xScale else yScale
                 src.postMatrix.postScale(
-                        scale,
-                        scale,
-                        (oldBound.xMin + oldBound.xMax) / 2,
-                        (oldBound.yMin + oldBound.yMax) / 2
+                    scale,
+                    scale,
+                    (oldBound.xMin + oldBound.xMax) / 2,
+                    (oldBound.yMin + oldBound.yMax) / 2
                 )
                 src.postMatrix.postTranslate(xTrans, yTrans)
             }
@@ -1285,7 +1557,7 @@ class CollagesView @JvmOverloads constructor(
     fun getSideCutLength(): Float {
         var minSideLength = Float.MAX_VALUE
         for (item: BackBitmapItem? in backBitmapItems!!) {
-            for (side: Segment in item!!.getPolygon().sides) {
+            for (side: Segment in item!!.drawingPolygon.sides) {
                 if (side.length() < minSideLength) {
                     minSideLength = side.length()
                 }
@@ -1338,7 +1610,7 @@ class CollagesView @JvmOverloads constructor(
     fun setAspectRatio(aspectRatio: Float) {
         this.aspectRatio = aspectRatio
         //        state = INIT;
-        isAuto = false
+//        isAuto = false
         requestLayout()
     }
 
@@ -1348,8 +1620,8 @@ class CollagesView @JvmOverloads constructor(
 
     fun setPathWidth(pathWidth: Float) {
         this.pathWidth = pathWidth
-        //        state = INIT;
-        initBackBitmapPolygons()
+        Log.i(TAG, "setPathWidth");
+//        initBackBitmapPolygons()
         initBackBitmapMatrix(false) // 缩小图片
         initBackBitmapPath()
         initBackBitmapDragButton()
@@ -1375,7 +1647,12 @@ class CollagesView @JvmOverloads constructor(
         swapBitmap(backBitmapItems[i]!!, backBitmapItems[j]!!)
     }
 
+    fun getBackBitmapIndex(item: BackBitmapItem?): Int {
+        return backBitmapItems!!.indexOf(item)
+    }
+
     private fun swapBitmap(backBitmapItemI: BackBitmapItem, backBitmapItemJ: BackBitmapItem) {
+        Log.i(TAG, "swapBitmap");
         val temp: Bitmap = backBitmapItemI.bitmap
         backBitmapItemI.bitmap = (backBitmapItemJ.bitmap)
         backBitmapItemJ.bitmap = (temp)
@@ -1392,7 +1669,8 @@ class CollagesView @JvmOverloads constructor(
     }
 
     fun addOnText(text: String) {
-        val addOnTextItem = AddOnTextItem(text)
+        Log.i(TAG, "addOnText");
+        val addOnTextItem = AddOnTextItem(text, addOnItems.size)
         val bounds = Rect()
         val paint: TextPaint = addOnTextItem.textPaint
         paint.getTextBounds(text, 0, text.length, bounds)
@@ -1417,30 +1695,196 @@ class CollagesView @JvmOverloads constructor(
         invalidate()
     }
 
-    fun addOnBitmap(bitmap: Bitmap) {
-        val scaleHeight = (viewHeight / bitmap.height).toFloat()
-        val scaleWidth = (viewWidth / bitmap.width).toFloat()
-        val scale = Math.min(1.0f, Math.min(scaleHeight, scaleWidth))
-        val newAddon = AddOnItem()
-        newAddon.bitmap = (
-            Bitmap.createScaledBitmap(
-                bitmap,
-                (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true
+//    fun addOnBitmap(bitmap: Bitmap) {
+//        val scaleHeight = (viewHeight / bitmap.height).toFloat()
+//        val scaleWidth = (viewWidth / bitmap.width).toFloat()
+//        val scale = Math.min(1.0f, Math.min(scaleHeight, scaleWidth))
+//        val newAddon = AddOnItem()
+//        newAddon.bitmap = (
+//            Bitmap.createScaledBitmap(
+//                bitmap,
+//                (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true
+//            )
+//        )
+//        newAddon.postMatrix.postTranslate(
+//            (viewWidth - newAddon.bitmap.getWidth().toFloat()) / 2,
+//            (viewHeight - newAddon.bitmap.getHeight().toFloat()) / 2
+//        )
+//        newAddon.generateNewDrawingZone()
+//        addOnItems.add(newAddon)
+//        invalidate()
+//    }
+
+
+    fun addOnBitmap(src: Bitmap?) {
+        Log.i(TAG, "addOnBitmap")
+        if (src == null) {
+            return
+        }
+
+//        float scaleHeight = 1.0f*viewHeight/src.getHeight();
+//        float scaleWidth = 1.0f*viewWidth/src.getWidth();
+//        float scale = Math.min(1.0f, Math.min(scaleHeight, scaleWidth));
+        val newAddon = AddOnItem(addOnItems.size)
+
+
+//        Bitmap bitmap = Bitmap.createScaledBitmap(src, (int) (src.getWidth() * scale), (int) (src.getHeight() * scale), true);
+        newAddon.bitmap = src
+        if (editMode === EditMode.FREE) {
+            val addHeight = newAddon.bitmap.height
+            val addWidth = newAddon.bitmap.width
+            var postScale = Math.min(viewHeight / 3.5f / addHeight, viewWidth / 3.5f / addWidth)
+            postScale = Math.min(1.0f, postScale)
+            val x = Math.random().toFloat() * (viewWidth * 2 / 3) + viewWidth / 6 - addWidth / 2
+            val y = Math.random().toFloat() * (viewHeight * 2 / 3) + viewHeight / 6 - addHeight / 2
+            val degree = Math.random().toFloat() * 90 - 45
+            newAddon.postMatrix.postRotate(degree)
+            newAddon.postMatrix.postScale(
+                postScale,
+                postScale,
+                (addWidth / 2).toFloat(),
+                (addHeight / 2).toFloat()
             )
-        )
-        newAddon.postMatrix.postTranslate(
-            (viewWidth - newAddon.bitmap.getWidth().toFloat()) / 2,
-            (viewHeight - newAddon.bitmap.getHeight().toFloat()) / 2
-        )
+            newAddon.postMatrix.postTranslate(x, y)
+
+//            if(addOnItems.size() % 9 == 0){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/6 - addWidth/2, viewHeight/6 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 1){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/2 - addWidth/2, viewHeight / 6 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 2){
+//                newAddon.getPostMatrix().postTranslate(viewWidth*5/6 - addWidth/2, viewHeight / 6 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 3){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/6 - addWidth/2, viewHeight/2 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 4){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/2 - addWidth/2, viewHeight / 2 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 5){
+//                newAddon.getPostMatrix().postTranslate(viewWidth*5/6 - addWidth/2, viewHeight / 2 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 6){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/6 - addWidth/2, viewHeight*5/6 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 7){
+//                newAddon.getPostMatrix().postTranslate(viewWidth/2 - addWidth/2, viewHeight*5/ 6 - addHeight/2);
+//            }else if(addOnItems.size() % 9 == 8){
+//                newAddon.getPostMatrix().postTranslate(viewWidth*5/6 - addWidth/2, viewHeight*5/ 6 - addHeight/2);
+//            }
+        } else {
+            newAddon.postMatrix.postTranslate(
+                ((viewWidth - newAddon.bitmap.width) / 2).toFloat(),
+                ((viewHeight - newAddon.bitmap.height) / 2).toFloat()
+            )
+        }
         newAddon.generateNewDrawingZone()
         addOnItems.add(newAddon)
         invalidate()
     }
 
+    fun onAddOnBitmapChanged(src: Bitmap?, index: Int) {
+        Log.i(TAG, "onAddOnBitmapChanged")
+        val newAddon = AddOnItem(index)
+        newAddon.bitmap = src!!
+        if (editMode === EditMode.FREE) {
+            val addHeight = newAddon.bitmap.height
+            val addWidth = newAddon.bitmap.width
+            var postScale = Math.min(viewHeight / 3.5f / addHeight, viewWidth / 3.5f / addWidth)
+            postScale = Math.min(1.0f, postScale)
+            newAddon.postMatrix.postScale(
+                postScale,
+                postScale,
+                (addWidth / 2).toFloat(),
+                (addHeight / 2).toFloat()
+            )
+            if (index % 9 == 0) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 6 - addWidth / 2).toFloat(),
+                    (viewHeight / 6 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 1) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 2 - addWidth / 2).toFloat(),
+                    (viewHeight / 6 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 2) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth * 5 / 6 - addWidth / 2).toFloat(),
+                    (viewHeight / 6 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 3) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 6 - addWidth / 2).toFloat(),
+                    (viewHeight / 2 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 4) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 2 - addWidth / 2).toFloat(),
+                    (viewHeight / 2 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 5) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth * 5 / 6 - addWidth / 2).toFloat(),
+                    (viewHeight / 2 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 6) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 6 - addWidth / 2).toFloat(),
+                    (viewHeight * 5 / 6 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 7) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth / 2 - addWidth / 2).toFloat(),
+                    (viewHeight * 5 / 6 - addHeight / 2).toFloat()
+                )
+            } else if (index % 9 == 8) {
+                newAddon.postMatrix.postTranslate(
+                    (viewWidth * 5 / 6 - addWidth / 2).toFloat(),
+                    (viewHeight * 5 / 6 - addHeight / 2).toFloat()
+                )
+            }
+        } else {
+            newAddon.postMatrix.postTranslate(
+                ((viewWidth - newAddon.bitmap.width) / 2).toFloat(),
+                ((viewHeight - newAddon.bitmap.height) / 2).toFloat()
+            )
+        }
+        newAddon.generateNewDrawingZone()
+        var toDel: AddOnItem? = null
+        var position = 0
+        while (position < addOnItems.size) {
+            if (addOnItems[position].index == index) {
+                toDel = addOnItems[position]
+                break
+            }
+            position++
+        }
+        if (toDel != null) {
+            if (currentItem != null && currentItem === toDel) {
+                setSelectMode(SelectMode.NONE, null)
+            }
+            addOnItems.remove(toDel)
+            addOnItems.add(position, newAddon)
+            invalidate()
+        }
+    }
+
+
     fun removeAddOn(addOnItem: AddOnItem) {
+        val index: Int = addOnItem.index
         addOnItems.remove(addOnItem)
         setSelectMode(SelectMode.NONE, null)
+        for (item in addOnItems) {
+            if (item.index > index) {
+                item.index = item.index - 1
+            }
+        }
         invalidate()
+    }
+
+
+    fun removeAddOn(index: Int) {
+        for (item in addOnItems) {
+            if (item.index == index) {
+                removeAddOn(item)
+                break
+            }
+        }
     }
 
     /**
@@ -1448,39 +1892,89 @@ class CollagesView @JvmOverloads constructor(
      * @return
      */
     fun getBitmap(): Bitmap {
-        isDrawingCacheEnabled = false
+        setIsSelectorEnable(false)
         isDrawingCacheEnabled = true
-        return drawingCache
+        val bmp = Bitmap.createBitmap(drawingCache)
+        isDrawingCacheEnabled = false
+        setIsSelectorEnable(true)
+        return bmp
     }
-
+    fun getCurrentItem(): BaseItem? {
+        return currentItem
+    }
     companion object {
         /** 默认位置 直线 */
         val DEFAULT_POSITION = arrayOf(
             arrayOf(),
-            arrayOf(intArrayOf(0, 0, 1000, 0, 1000, 1000, 0, 1000)),
+            arrayOf(arrayOf(0, 0, 1000, 0, 1000, 1000, 0, 1000)),
             arrayOf(
-                intArrayOf(0, 0, 500, 0, 500, 1000, 0, 1000),
-                intArrayOf(500, 0, 1000, 0, 1000, 1000, 500, 1000)
+                arrayOf(0, 0, 500, 0, 500, 1000, 0, 1000),
+                arrayOf(500, 0, 1000, 0, 1000, 1000, 500, 1000)
             ),
             arrayOf(
-                intArrayOf(0, 0, 1000, 0, 1000, 400, 0, 400),
-                intArrayOf(0, 400, 500, 400, 500, 1000, 0, 1000),
-                intArrayOf(500, 400, 1000, 400, 1000, 1000, 500, 1000)
+                arrayOf(0, 0, 1000, 0, 1000, 400, 0, 600),
+                arrayOf(0, 600, 500, 500, 600, 1000, 0, 1000),
+                arrayOf(500, 500, 1000, 400, 1000, 1000, 600, 1000)
             ),
             arrayOf(
-                intArrayOf(0, 0, 500, 0, 500, 500, 0, 500),
-                intArrayOf(500, 0, 1000, 0, 1000, 500, 500, 500),
-                intArrayOf(0, 500, 500, 500, 500, 1000, 0, 1000),
-                intArrayOf(500, 500, 1000, 500, 1000, 1000, 500, 1000)
+                arrayOf(0, 0, 500, 0, 500, 500, 0, 500),
+                arrayOf(500, 0, 1000, 0, 1000, 500, 500, 500),
+                arrayOf(0, 500, 500, 500, 500, 1000, 0, 1000),
+                arrayOf(500, 500, 1000, 500, 1000, 1000, 500, 1000)
+            ),
+            arrayOf(
+                arrayOf(0, 0, 500, 0, 500, 500, 0, 500),
+                arrayOf(500, 0, 1000, 0, 1000, 500, 500, 500),
+                arrayOf(0, 500, 333, 500, 333, 1000, 0, 1000),
+                arrayOf(333, 500, 667, 500, 667, 1000, 333, 1000),
+                arrayOf(667, 500, 1000, 500, 1000, 1000, 667, 1000)
+            ),
+            arrayOf(
+                arrayOf(0, 0, 333, 0, 333, 500, 0, 500),
+                arrayOf(333, 0, 667, 0, 667, 500, 333, 500),
+                arrayOf(667, 0, 1000, 0, 1000, 500, 667, 500),
+                arrayOf(0, 500, 333, 500, 333, 1000, 0, 1000),
+                arrayOf(333, 500, 667, 500, 667, 1000, 333, 1000),
+                arrayOf(667, 500, 1000, 500, 1000, 1000, 667, 1000)
+            ),
+            arrayOf(
+                arrayOf(0, 0, 333, 0, 333, 333, 0, 333),
+                arrayOf(0, 333, 333, 333, 333, 667, 0, 667),
+                arrayOf(0, 667, 333, 667, 333, 1000, 0, 1000),
+                arrayOf(333, 0, 733, 0, 733, 600, 333, 600),
+                arrayOf(733, 0, 1000, 0, 1000, 600, 733, 600),
+                arrayOf(333, 600, 600, 600, 600, 1000, 333, 1000),
+                arrayOf(600, 600, 1000, 600, 1000, 1000, 600, 1000)
+            ),
+            arrayOf(
+                arrayOf(0, 0, 333, 0, 333, 333, 0, 333),
+                arrayOf(333, 0, 667, 0, 667, 333, 333, 333),
+                arrayOf(667, 0, 1000, 0, 1000, 333, 667, 333),
+                arrayOf(0, 333, 667, 333, 667, 667, 0, 667),
+                arrayOf(667, 333, 1000, 333, 1000, 667, 667, 667),
+                arrayOf(0, 667, 333, 667, 333, 1000, 0, 1000),
+                arrayOf(333, 667, 667, 667, 667, 1000, 333, 1000),
+                arrayOf(667, 667, 1000, 667, 1000, 1000, 667, 1000)
+            ),
+            arrayOf(
+                arrayOf(0, 0, 667, 0, 667, 500, 0, 500),
+                arrayOf(667, 0, 1000, 0, 1000, 250, 667, 250),
+                arrayOf(667, 250, 1000, 250, 1000, 500, 667, 500),
+                arrayOf(0, 500, 333, 500, 333, 750, 0, 750),
+                arrayOf(333, 500, 667, 500, 667, 750, 333, 750),
+                arrayOf(667, 500, 1000, 500, 1000, 750, 667, 750),
+                arrayOf(0, 750, 333, 750, 333, 1000, 0, 1000),
+                arrayOf(333, 750, 667, 750, 667, 1000, 333, 1000),
+                arrayOf(667, 750, 1000, 750, 1000, 1000, 667, 1000)
             )
-        ) //4张图
+        )
 
         /**
          * 放大缩小倍数限制
          */
         val MAX_SCALE = 4.0f
         val MIN_SCALE = 0.25f
-        private val DEFAULT_PATH_WIDTH_DP = 6f
+        private val DEFAULT_PATH_WIDTH_DP = 2f
         private val DEFAULT_SELECTOR_WIDTH_DP = 2f
         private val DEFAULT_DRAG_BUTTON_RADIUS_DP = 6f
 
@@ -1498,7 +1992,7 @@ class CollagesView @JvmOverloads constructor(
          * 拼接图片数量范围
          */
         private val MIN_PICS = 1
-        private val MAX_PICS = 4
+        private val MAX_PICS = 9
 
         /**
          * bitmap双击相关
@@ -1528,18 +2022,24 @@ class CollagesView @JvmOverloads constructor(
             attrs, R.styleable.CollagesView,
             R.attr.collagesViewStyle, defStyleAttr
         )
-        pathWidth = a.getDimension(
+        defaultPathWidth = a.getDimension(
             R.styleable.CollagesView_path_width,
-                DensityUtils.dip2px(context, DEFAULT_PATH_WIDTH_DP).toFloat()
+            dip2px(context, DEFAULT_PATH_WIDTH_DP).toFloat()
         )
         selectorWidth = a.getDimension(
             R.styleable.CollagesView_selector_line_width,
-            DensityUtils.dip2px(context, DEFAULT_SELECTOR_WIDTH_DP).toFloat()
+            dip2px(context, DEFAULT_SELECTOR_WIDTH_DP).toFloat()
         )
         dragBtnRadius = a.getDimension(
             R.styleable.CollagesView_dragbutton_radius,
-            DensityUtils.dip2px(context, DEFAULT_DRAG_BUTTON_RADIUS_DP).toFloat()
+            dip2px(context, DEFAULT_DRAG_BUTTON_RADIUS_DP).toFloat()
         )
+        defaultPadding = a.getDimension(
+            R.styleable.CollagesView_padding_width,
+            dip2px(context, DEFAULT_PADDING_WIDTH_DP.toFloat()).toFloat()
+        )
+
+        pathWidth = defaultPathWidth
         a.recycle()
     }
 }

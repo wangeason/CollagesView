@@ -20,6 +20,7 @@
     <attr name="collagesViewStyle" format="reference"/>
     <declare-styleable name="CollagesView">
         <attr name="path_width" format="dimension|reference"/>
+        <attr name="padding_width" format="dimension|reference"/>
         <attr name="selector_line_color" format="color|reference"/>
         <attr name="selector_line_width" format="dimension|reference"/>
         <attr name="dragbutton_radius" format="dimension|reference"/>

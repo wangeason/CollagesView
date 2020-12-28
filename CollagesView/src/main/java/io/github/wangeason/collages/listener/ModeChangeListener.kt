@@ -55,7 +55,7 @@ class ModeChangeListener : CollagesView.ModeChangeListener {
         Log.i(TAG, "BI_SWAP_DRAGGING")
     }
 
-    override fun onBitmapItemSwapDropped(point: Point?, currentBackBitmapItem: BackBitmapItem?) {
+    override fun onBitmapItemSwapDropped(point: Point?, oriBackBitmapItem: BackBitmapItem?, currentBackBitmapItem: BackBitmapItem?) {
         Log.i(TAG, "BI_SWAP_DROPPED")
     }
 
