@@ -6,6 +6,16 @@
     android:layout_height="match_parent"
     tools:context=".ui.home.HomeFragment">
 
+    <Button
+        android:id="@+id/add_picture"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="6dp"
+        android:text="Add"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/collage"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <io.github.wangeason.CollagesView
         android:id="@+id/collage"
         android:layout_width="wrap_content"
@@ -14,29 +24,29 @@
         android:background="@color/grey_cc"
         android:padding="20dp"
         app:dragbutton_radius="6dp"
-        app:layout_constraintBottom_toTopOf="@+id/text_home"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/drag_helper"
+        app:layout_constraintTop_toTopOf="parent"
         app:path_width="6dp"
         app:selector_line_width="2dp" />
 
     <io.github.wangeason.collages.model.DragSwapHelperImageView
         android:id="@+id/drag_helper"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <TextView
-        android:id="@+id/text_home"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:textAlignment="center"
-        android:textSize="20sp"
+        android:layout_height="match_parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"/>
-<!--        app:layout_constraintTop_toTopOf="parent" -->
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/clear_pic"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="20dp"
+        android:text="Random Reset"
+        app:layout_constraintBottom_toTopOf="@+id/collage"
+        app:layout_constraintEnd_toStartOf="@+id/add_picture" />
+    <!--        app:layout_constraintTop_toTopOf="parent" -->
 </androidx.constraintlayout.widget.ConstraintLayout>

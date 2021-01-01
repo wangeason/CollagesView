@@ -653,6 +653,7 @@ class CollagesView @JvmOverloads constructor(
         invalidate()
     }
     override fun onDraw(canvas: Canvas) {
+        System.out.println("onDraw")
         if (tileId != -1) {
             val paint = Paint()
             paint.shader = BitmapShader(
@@ -1455,6 +1456,7 @@ class CollagesView @JvmOverloads constructor(
             for (bitmap: Bitmap? in bitmaps) {
                 backBitmapItems!!.add(BackBitmapItem((bitmap)!!))
             }
+            requestLayout()
         } else {
             for (bitmap: Bitmap? in bitmaps) {
                 backBitmapItems!!.add(BackBitmapItem((bitmap)!!))

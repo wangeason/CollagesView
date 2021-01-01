@@ -51,5 +51,5 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
 //    implementation 'io.github.wangeason:CollagesView:0.0.3'
-    implementation 'io.github.wangeason:MultiPhotoPicker:0.2.0'
+//    implementation 'io.github.wangeason:MultiPhotoPicker:0.2.0'
 }
