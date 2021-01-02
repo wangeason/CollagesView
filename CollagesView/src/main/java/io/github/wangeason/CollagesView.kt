@@ -201,7 +201,7 @@ class CollagesView @JvmOverloads constructor(
     /** 记录是拖拉照片模式还是放大缩小照片模式  */
     private var mode = Mode.INIT // 初始状态
 
-    private var editMode = EditMode.COLLAGE
+    var editMode = EditMode.COLLAGE
         set(value) {
             field = value
             addOnItems.clear()
@@ -741,7 +741,7 @@ class CollagesView @JvmOverloads constructor(
                 canvas.restore()
                 if (!(isMode(Mode.AO_DRAGGING) || isMode(Mode.AO_ZOOM_START) || isMode(Mode.AO_ZOOMING))) {
                     drawButton(canvas, addOnItem.delButton);
-                    drawButton(canvas, addOnItem.flipButton);
+                    if (currentItem !is AddOnTextItem) drawButton(canvas, addOnItem.flipButton);
                     drawButton(canvas, addOnItem.rotateButton);
                 }
             }

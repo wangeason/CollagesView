@@ -15,7 +15,7 @@ class OnBtnClickListener : CollagesView.OnBtnClickListener {
     ) {
         Log.i(TAG, "onDelBtnClicked")
         val builder: AlertDialog.Builder = AlertDialog.Builder(context)
-        builder.setTitle("确认").setCancelable(true).setMessage("删除贴纸")
+        builder.setTitle("Please confirm").setCancelable(true).setMessage("Do you want to delete this sticker?")
             .setPositiveButton("YES",
                 DialogInterface.OnClickListener { dialog, which ->
                     collagesView!!.removeAddOn(

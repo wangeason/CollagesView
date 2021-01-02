@@ -6,16 +6,6 @@
     android:layout_height="match_parent"
     tools:context=".ui.home.HomeFragment">
 
-    <Button
-        android:id="@+id/add_picture"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="6dp"
-        android:text="Add"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/collage"
-        app:layout_constraintEnd_toEndOf="parent" />
-
     <io.github.wangeason.CollagesView
         android:id="@+id/collage"
         android:layout_width="wrap_content"
@@ -44,9 +34,9 @@
         android:id="@+id/clear_pic"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="20dp"
+        android:layout_marginEnd="6dp"
         android:text="Random Reset"
         app:layout_constraintBottom_toTopOf="@+id/collage"
-        app:layout_constraintEnd_toStartOf="@+id/add_picture" />
+        app:layout_constraintEnd_toEndOf="parent" />
     <!--        app:layout_constraintTop_toTopOf="parent" -->
 </androidx.constraintlayout.widget.ConstraintLayout>

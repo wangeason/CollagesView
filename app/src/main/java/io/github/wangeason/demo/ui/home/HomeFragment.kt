@@ -21,8 +21,6 @@ class HomeFragment : Fragment() {
     private lateinit var homeViewModel: HomeViewModel
     private lateinit var collagesView: CollagesView
     private lateinit var dragSwapHelperImageView: DragSwapHelperImageView
-    private lateinit var addButton: Button
-    private val SELECT_PICTURE = 1
     val bitmaps: ArrayList<Bitmap> = ArrayList()
 
     override fun onCreateView(
@@ -34,15 +32,6 @@ class HomeFragment : Fragment() {
         val root = inflater.inflate(R.layout.fragment_home, container, false)
         collagesView = root.findViewById(R.id.collage)
         dragSwapHelperImageView = root.findViewById(R.id.drag_helper)
-        addButton = root.findViewById(R.id.add_picture)
-
-        addButton.setOnClickListener {
-            val intent = Intent()
-            intent.type = "image/*"
-            intent.action = Intent.ACTION_GET_CONTENT
-            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            startActivityForResult(Intent.createChooser(intent,
-                    "Select Picture"), SELECT_PICTURE) }
 
         (root.findViewById(R.id.clear_pic) as Button).setOnClickListener {
             val arrayList = ArrayList<Bitmap>()
@@ -62,6 +51,7 @@ class HomeFragment : Fragment() {
         bitmaps.add(BitmapFactory.decodeResource(resources, R.drawable.image7))
         bitmaps.add(BitmapFactory.decodeResource(resources, R.drawable.image8))
         bitmaps.add(BitmapFactory.decodeResource(resources, R.drawable.image9))
+
         collagesView.setImageBitmaps(bitmaps)
 
         return root

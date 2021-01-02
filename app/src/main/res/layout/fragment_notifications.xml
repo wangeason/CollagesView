@@ -6,17 +6,38 @@
     android:layout_height="match_parent"
     tools:context=".ui.notifications.NotificationsFragment">
 
-    <TextView
-        android:id="@+id/text_notifications"
-        android:layout_width="match_parent"
+    <Button
+        android:id="@+id/add_text"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:textAlignment="center"
-        android:textSize="20sp"
+        android:layout_marginEnd="6dp"
+        android:text="Add Text"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/collage"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <io.github.wangeason.CollagesView
+        android:id="@+id/collage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@color/grey_cc"
+        android:padding="20dp"
+        app:dragbutton_radius="6dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:path_width="6dp"
+        app:selector_line_width="2dp" />
+
+    <EditText
+        android:id="@+id/text_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="67dp"
+        android:singleLine="true"
+        app:layout_constraintBottom_toTopOf="@+id/add_text"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
