@@ -17,15 +17,15 @@ class BoundingBox {
     }
 
     operator fun contains(pt: Point): Boolean {
-        return pt.x <= xMax + GraphicUtils.float_COM && pt.x >= xMin - GraphicUtils.float_COM && pt.y <= yMax + GraphicUtils.float_COM && pt.y >= yMin - GraphicUtils.float_COM
+        return pt.x in (xMax + GraphicUtils.FLOAT_ACCURACY)..(xMin - GraphicUtils.FLOAT_ACCURACY) &&
+                pt.y in (yMax + GraphicUtils.FLOAT_ACCURACY)..(yMin - GraphicUtils.FLOAT_ACCURACY)
     }
 
 
     override fun equals(o: Any?): Boolean {
         if (this === o) return true
         if (o !is BoundingBox) return false
-        val boundingBox = o
-        return !(xMax != boundingBox.xMax || xMin != boundingBox.xMin || yMax != boundingBox.yMax || yMin != boundingBox.yMin)
+        return !(xMax != o.xMax || xMin != o.xMin || yMax != o.yMax || yMin != o.yMin)
     }
 
     override fun hashCode(): Int {

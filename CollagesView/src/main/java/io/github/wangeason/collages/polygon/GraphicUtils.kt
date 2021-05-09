@@ -6,9 +6,10 @@ import android.util.Log
 import io.github.wangeason.CollagesView
 import io.github.wangeason.collages.model.collage.PathArcPoints
 import java.util.*
+import kotlin.math.abs
 
 object GraphicUtils {
-    val float_COM = 0.5f
+    const val FLOAT_ACCURACY = 0.5f
 
     /**
      * 放大缩小倍数限制
@@ -20,7 +21,7 @@ object GraphicUtils {
      * 日志状态 DEBUG
      */
     private val D: Boolean = CollagesView.DEBUG
-    private val TAG = "GraphicUtils"
+    private const val TAG = "GraphicUtils"
 
     /**
      * CenterCrop
@@ -158,91 +159,6 @@ object GraphicUtils {
     }
 
     /**
-     * By given ray and one side of the polygon, check if both lines intersect.
-     *
-     * @param ray
-     * @param side
-     * @return `True` if both lines intersect, otherwise return `False`
-     */
-    fun intersect(ray: Segment, side: Segment): Boolean {
-        var intersectPoint: Point? = null
-
-        // if both vectors aren't from the kind of x=1 lines then go into
-        if (!ray.isVertical() && !side.isVertical()) {
-            // check if both vectors are parallel. If they are parallel then no intersection point will exist
-            if (ray.getA() == side.getA()) {
-                return false
-            }
-            val x = (side.getB() - ray.getB()) / (ray.getA() - side.getA()) // x = (b2-b1)/(a1-a2)
-            val y = side.getA() * x + side.getB() // y = a2*x+b2
-            intersectPoint = Point(x, y)
-        } else if (ray.isVertical() && !side.isVertical()) {
-            val x: Float = ray.start.x
-            val y = side.getA() * x + side.getB()
-            intersectPoint = Point(x, y)
-        } else if (!ray.isVertical() && side.isVertical()) {
-            val x: Float = side.start.x
-            val y = ray.getA() * x + ray.getB()
-            intersectPoint = Point(x, y)
-        } else {
-            return false
-        }
-
-        // System.out.println("Ray: " + ray.toString() + " ,Side: " + side);
-        // System.out.println("Intersect point: " + intersectPoint.toString());
-        return side.isInside(intersectPoint) && ray.isInside(intersectPoint)
-    }
-
-    /**
-     * By given ray and one side of the polygon, check if both lines intersect.
-     *
-     * @param ray
-     * @param side
-     * @return `True` if both lines intersect, otherwise return `False`
-     * added by wangyansong
-     */
-    fun intersect(ray: Segment, side: Segment, points: ArrayList<Point>?): Boolean {
-        var points = points
-        var intersectPoint: Point? = null
-        if (points == null) {
-            points = ArrayList()
-        }
-
-        // if both vectors aren't from the kind of x=1 lines then go into
-        if (!ray.isVertical() && !side.isVertical()) {
-            // check if both vectors are parallel. If they are parallel then no intersection point will exist
-            if (ray.getA() == side.getA()) {
-                return false
-            }
-            val x = (side.getB() - ray.getB()) / (ray.getA() - side.getA()) // x = (b2-b1)/(a1-a2)
-            val y = side.getA() * x + side.getB() // y = a2*x+b2
-            intersectPoint = Point(x, y)
-            points.add(intersectPoint)
-        } else if (ray.isVertical() && !side.isVertical()) {
-            val x: Float = ray.start.x
-            val y = side.getA() * x + side.getB()
-            intersectPoint = Point(x, y)
-            points.add(intersectPoint)
-        } else if (!ray.isVertical() && side.isVertical()) {
-            val x: Float = side.start.x
-            val y = ray.getA() * x + ray.getB()
-            intersectPoint = Point(x, y)
-            points.add(intersectPoint)
-        } else {
-            return false
-        }
-
-        // System.out.println("Ray: " + ray.toString() + " ,Side: " + side);
-        // System.out.println("Intersect point: " + intersectPoint.toString());
-        return side.isInside(intersectPoint) && ray.isInside(intersectPoint)
-    }
-
-    fun getDisPtToPt(pt1: Point, pt2: Point): Float {
-        return Math.sqrt(((pt1.x - pt2.x) * (pt1.x - pt2.x) + (pt1.y - pt2.y) * (pt1.y - pt2.y)).toDouble())
-            .toFloat()
-    }
-
-    /**
      * 点到直线距离
      * @param segment
      * @param point
@@ -250,19 +166,16 @@ object GraphicUtils {
      */
     fun getDisFromPtToLine(segment: Segment, point: Point): Float {
         if (segment.isVertical()) {
-            return Math.abs(point.x - segment.start.x)
+            return abs(point.x - segment.start.x)
         } else if (segment.getA() == 0f) {
-            return Math.abs(point.y - segment.start.y)
+            return abs(point.y - segment.start.y)
         } else {
             val a = segment.getA()
             val b = segment.getB()
             val sy = a * point.x + b
             val sx = (point.y - b) / a
-            return Math.abs(
-                (point.y - sy) * (point.x - sx) / getDisPtToPt(
-                    Point(point.x, sy),
-                    Point(sx, point.y)
-                )
+            return abs(
+                (point.y - sy) * (point.x - sx) / Point(point.x, sy).disToPt(Point(sx, point.y))
             )
         }
     }
@@ -354,10 +267,7 @@ object GraphicUtils {
             val num = insideSegments.size
             //为了每条边和原多边形对应
             for (i in num until num * 2) {
-                intersect(
-                    insideSegments[(i - 1) % num],
-                    insideSegments[i % num], vertexes
-                )
+                vertexes.add(insideSegments[(i - 1) % num].lineIntersect(insideSegments[i % num]))
             }
 
             //创建缩小的多边形
@@ -380,35 +290,15 @@ object GraphicUtils {
      */
     fun isSegmentsOnSameLine(src: Segment, des: Segment): Boolean {
         if (src.isVertical() && des.isVertical()) {
-            return Math.abs(src.start.x - des.start.x) < float_COM
-        } else return if (!src.isVertical() && !des.isVertical()) {
-            (Math.abs(src.getA() - des.getA()) < float_COM) && (Math.abs(src.getB() - des.getB()) < float_COM)
+            return abs(src.start.x - des.start.x) < FLOAT_ACCURACY
+        } else if (!src.isVertical() && !des.isVertical()) {
+            return (abs(src.getA() - des.getA()) < FLOAT_ACCURACY) && (abs(src.getB() - des.getB()) < FLOAT_ACCURACY)
         } else {
-            false
+            return false
         }
     }
 
-    /**
-     * 判断src线段是不是被des包括
-     * @param src
-     * @param des
-     * @return
-     */
-    fun isSegmentInSegment(src: Segment, des: Segment): Boolean {
-        if (isSegmentsOnSameLine(src, des)) {
-            val maxX: Float =
-                if (des.start.x > des.end.x) des.start.x else des.end.x
-            val minX: Float =
-                if (des.start.x < des.end.x) des.start.x else des.end.x
-            val maxY: Float =
-                if (des.start.y > des.end.y) des.start.y else des.end.y
-            val minY: Float =
-                if (des.start.y < des.end.y) des.start.y else des.end.y
-            return ((src.start.x >= minX - float_COM && src.start.x <= maxX + float_COM) && (src.start.y >= minY - float_COM && src.start.y <= maxY + float_COM)) &&
-                ((src.end.x >= minX - float_COM && src.end.x <= maxX + float_COM) && (src.end.y >= minY - float_COM && src.end.y <= maxY + float_COM))
-        }
-        return false
-    }
+
 
     /**
      * position = sign( (Bx-Ax)*(Y-Ay) - (By-Ay)*(X-Ax) )
@@ -421,11 +311,11 @@ object GraphicUtils {
     fun isTwoPointsOnSameSide(segment: Segment, pt1: Point, pt2: Point): Int {
         val start: Point = segment.start
         val end: Point = segment.end
-        val sidePt1 = (start.x - end.x) * (pt1.y - end.y) - (start.y - end.y) * (pt1.x - end.x)
-        val sidePt2 = (start.x - end.x) * (pt2.y - end.y) - (start.y - end.y) * (pt2.x - end.x)
-        if (Math.abs(sidePt1) < float_COM || Math.abs(sidePt2) < float_COM) {
-            return 0
-        } else return if ((sidePt1 > 0 && sidePt2 > 0) || (sidePt1 < 0 && sidePt2 < 0)) {
+        val pt1Pos = (start.x - end.x) * (pt1.y - end.y) - (start.y - end.y) * (pt1.x - end.x)
+        val pt2Pos = (start.x - end.x) * (pt2.y - end.y) - (start.y - end.y) * (pt2.x - end.x)
+        return if (abs(pt1Pos) < FLOAT_ACCURACY || abs(pt2Pos) < FLOAT_ACCURACY) {
+            0
+        } else if (pt1Pos * pt2Pos > 0) {
             1
         } else {
             -1
@@ -442,7 +332,8 @@ object GraphicUtils {
         val start: Point = segment.start
         val end: Point = segment.end
         val sidePt = (start.x - end.x) * (pt.y - end.y) - (start.y - end.y) * (pt.x - end.x)
-        return Math.abs(sidePt) < float_COM
+        return abs(sidePt) < FLOAT_ACCURACY
+//        return abs(sidePt) == 0f
     }
 
     /**
@@ -479,59 +370,40 @@ object GraphicUtils {
      */
     fun combine(src: Segment, des: Segment): Segment? {
         //不在一条直线上
-        if (!isSegmentsOnSameLine(des, src)) {
-            if (D) Log.i(TAG, "src:" + src.toString() + " des:" + des.toString())
+        if (!des.isOnSameLineOf(src)) {
+            if (D) Log.i(TAG, "src:$src des:$des")
             return null
         }
 
         //包含
-        if (isSegmentInSegment(des, src)) {
+        if (des.isContainedBy(src)) {
             return src
         }
-        if (isSegmentInSegment(src, des)) {
+        if (src.isContainedBy(des)) {
             return des
         }
 
         //不重叠
-        if (!(des.boundingBox()!!.contains(src.end) || des.boundingBox()!!
+        if (!(des.boundingBox().contains(src.end) || des.boundingBox()
                 .contains(src.start))
         ) {
             return null
         }
 
         //部分重叠
-        if (des.boundingBox()!!.contains(src.end)) {
-            return if (getDisPtToPt(src.start, des.start) > getDisPtToPt(
-                    src.start,
-                    des.end
-                )
-            ) {
+        if (des.boundingBox().contains(src.end)) {
+            return if (src.start.disToPt(des.start) > src.start.disToPt(des.end)) {
                 Segment(des.start, src.start)
             } else {
                 Segment(des.end, src.start)
             }
         } else {
-            return if (getDisPtToPt(src.end, des.start) > getDisPtToPt(
-                    src.end,
-                    des.end
-                )
-            ) {
+            return if (src.end.disToPt(des.start) > src.end.disToPt(des.end)) {
                 Segment(des.start, src.end)
             } else {
                 Segment(des.end, src.end)
             }
         }
-    }
-
-    /**
-     * 判断s1是否与s2十字相交或者s1有端点在s2上
-     * @param s1
-     * @param s2
-     * @return
-     */
-    fun isSegmentsCross(s1: Segment, s2: Segment): Boolean {
-        return isTwoPointsOnSameSide(s1, s2.end, s2.start) == -1 &&
-                isTwoPointsOnSameSide(s2, s1.end, s1.start) != 1
     }
 
     /**
@@ -559,7 +431,7 @@ object GraphicUtils {
         var index = 0
         for (i in 0 until result.sides.size) {
             val side: Segment = result.sides.get(i)
-            if (isSegmentsOnSameLine(side, moveSegment)) {
+            if (side.isOnSameLineOf(moveSegment)) {
                 movingSide = side
                 index = i
                 break
@@ -568,11 +440,10 @@ object GraphicUtils {
         if (D) {
             Log.i(
                 "GraphicUtils",
-                "movingSide:" + moveSegment.toString() + " polygon sides: " + result.sides
-                    .get(0).toString()
-                    .toString() + " " + result.sides.get(1).toString()
-                    .toString() + " " + result.sides.get(2).toString()
-                    .toString() + " " + result.sides.get(3).toString()
+                "movingSide:$moveSegment polygon sides: " + result.sides[0].toString()
+                    .toString() + " " + result.sides[1].toString()
+                    .toString() + " " + result.sides[2].toString()
+                    .toString() + " " + result.sides[3].toString()
             )
         }
 
@@ -605,12 +476,9 @@ object GraphicUtils {
             }
         }
 
-        //移动的目标边与相邻边的焦点
-        val temp = ArrayList<Point>()
-        intersect(targetSide, trackBefore, temp)
-        intersect(targetSide, trackAfter, temp)
-        val crossBefore = temp[0]
-        val crossAfter = temp[1]
+        //移动的目标边与相邻边的交点
+        val crossBefore = targetSide.lineIntersect(trackBefore)
+        val crossAfter = targetSide.lineIntersect(trackAfter)
 
         //替换Side
         result.sides.remove(trackBefore)
@@ -663,7 +531,7 @@ object GraphicUtils {
             val thisAngle = thisSide.getVector().getRotateAngle()
             val nextAngle = nextSide.getVector().getRotateAngle()
             val angle =
-                if (Math.abs(thisAngle - nextAngle + Math.PI) < Math.PI) Math.abs(thisAngle - nextAngle + Math.PI) else Math.PI * 2 - Math.abs(
+                if (abs(thisAngle - nextAngle + Math.PI) < Math.PI) abs(thisAngle - nextAngle + Math.PI) else Math.PI * 2 - abs(
                     thisAngle - nextAngle + Math.PI
                 )
             //只有方向
@@ -686,9 +554,9 @@ object GraphicUtils {
             val startAngle = startVector.getRotateAngle()
             val targetAngle = targetVector.getRotateAngle()
             center.sweepAngle = (
-                if (Math.abs(targetAngle - startAngle) < Math.PI) (Math.abs(
+                if (abs(targetAngle - startAngle) < Math.PI) (abs(
                     targetAngle - startAngle
-                )).toFloat() else (Math.PI * 2 - Math.abs(targetAngle - startAngle)).toFloat()
+                )).toFloat() else (Math.PI * 2 - abs(targetAngle - startAngle)).toFloat()
             )
 
             //这个判断与多变形的初始化向量方向有关，此处选大于0

@@ -16,7 +16,6 @@ import io.github.wangeason.collages.model.collage.PathArcPoints
 import io.github.wangeason.collages.polygon.*
 import io.github.wangeason.collages.polygon.GraphicUtils.getCenterCropMatrix
 import io.github.wangeason.collages.polygon.GraphicUtils.getCenterInsideMatrix
-import io.github.wangeason.collages.polygon.GraphicUtils.getDisPtToPt
 import io.github.wangeason.collages.polygon.GraphicUtils.getShrinkPolygon
 import io.github.wangeason.collages.polygon.Point
 import io.github.wangeason.collages.utils.DensityUtils.dip2px
@@ -449,18 +448,10 @@ class CollagesView @JvmOverloads constructor(
         for (backBitmapItem: BackBitmapItem? in backBitmapItems!!) {
             backBitmapItem!!.clearDragButton()
             for (index in 0 until backBitmapItem.getPolygon().sides.size) {
-                if (!GraphicUtils.isSegmentsOnSameLine(
-                        backBitmapItem.getPolygon().sides.get(index), border1
-                    )
-                    && !GraphicUtils.isSegmentsOnSameLine(
-                        backBitmapItem.getPolygon().sides.get(index), border2
-                    )
-                    && !GraphicUtils.isSegmentsOnSameLine(
-                        backBitmapItem.getPolygon().sides.get(index), border3
-                    )
-                    && !GraphicUtils.isSegmentsOnSameLine(
-                        backBitmapItem.getPolygon().sides.get(index), border4
-                    )
+                if (!backBitmapItem.getPolygon().sides.get(index).isOnSameLineOf(border1)
+                    && !backBitmapItem.getPolygon().sides.get(index).isOnSameLineOf(border2)
+                    && !backBitmapItem.getPolygon().sides.get(index).isOnSameLineOf(border3)
+                    && !backBitmapItem.getPolygon().sides.get(index).isOnSameLineOf(border4)
                 ) {
                     val dragButton = DragButton()
                     dragButton.index = index
@@ -1142,41 +1133,24 @@ class CollagesView @JvmOverloads constructor(
         addOnItems.add(0, addOnItem)
     }
     private fun onWhichFlipButton(flipButton: FlipButton, startPoint: PointF): FlipButton? {
-        return if (getDisPtToPt(
-                flipButton.center,
-                Point(startPoint.x, startPoint.y)
-            ) < dragBtnRadius * 3
-        ) {
+        return if (flipButton.center.disToPt(Point(startPoint.x, startPoint.y)) < dragBtnRadius * 3) {
             flipButton
         } else null
     }
     private fun onWhichRotateButton(rotateButton: RotateButton, startPoint: PointF): RotateButton? {
-        return if (GraphicUtils.getDisPtToPt(
-                rotateButton.center,
-                Point(startPoint.x, startPoint.y)
-            ) < dragBtnRadius * 3
-        ) {
+        return if (rotateButton.center.disToPt(Point(startPoint.x, startPoint.y)) < dragBtnRadius * 3) {
             rotateButton
         } else null
     }
 
     private fun onWhichDelButton(delButton: DelButton, startPoint: PointF): DelButton? {
-        return if (GraphicUtils.getDisPtToPt(
-                delButton.center,
-                Point(startPoint.x, startPoint.y)
-            ) < dragBtnRadius * 3
-        ) {
+        return if (delButton.center.disToPt(Point(startPoint.x, startPoint.y)) < dragBtnRadius * 3) {
             delButton
         } else null
     }
 
     private fun getEventItem(event: MotionEvent): BaseItem? {
-        val addOnItem: AddOnItem? = getEventAddOnItem(event)
-        return if (addOnItem != null) {
-            addOnItem
-        } else {
-            getEventBitmapItem(event)
-        }
+        return getEventAddOnItem(event) ?: getEventBitmapItem(event)
     }
 
     private fun getEventBitmapItem(event: MotionEvent): BackBitmapItem? {

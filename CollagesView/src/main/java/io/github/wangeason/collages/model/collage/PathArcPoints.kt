@@ -30,7 +30,7 @@ class PathArcPoints {
 
     val rectF: RectF
         get() {
-            val r: Float = GraphicUtils.getDisPtToPt(center, startPoint)
+            val r: Float = center.disToPt(startPoint)
             return RectF(center.x - r, center.y - r, center.x + r, center.y + r)
         }
 }

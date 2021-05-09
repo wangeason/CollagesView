@@ -56,9 +56,7 @@ object DragPolygonHelper {
         /**
          * 所有的边组成的最长线段
          */
-        val allComSegmentsMap: HashMap<Segment, ArrayList<Segment?>> = getAllCombinedSegments(
-            oriPolygons
-        )
+        val allComSegmentsMap: HashMap<Segment, ArrayList<Segment?>> = getAllCombinedSegments()
         val allComSegments: ArrayList<Segment?> = ArrayList<Segment?>(allComSegmentsMap.keys)
         if (D) {
             val builder = StringBuilder()
@@ -84,19 +82,19 @@ object DragPolygonHelper {
         //找到移动边所在的最长线段
         var moveLine: Segment? = null
         for (seg in allComSegments) {
-            if (GraphicUtils.isSegmentInSegment(opSegment, seg!!)) {
+            if (opSegment.isContainedBy(seg!!)) {
                 moveLine = seg
             }
         }
         requireNotNull(moveLine) { "cant find move segment, all segments counts:" + allComSegments.size }
         if (D) {
-            Log.i(TAG, "moveLine: " + moveLine.toString())
+            Log.i(TAG, "moveLine: $moveLine")
         }
 
         //所有与移动边所在的最长线段相交的线段，（可以作为滑动轨道的线段）
         val tracks: ArrayList<Segment> = ArrayList<Segment>()
         for (seg in allComSegments) {
-            if (GraphicUtils.isSegmentsCross(moveLine, seg!!)) {
+            if (moveLine.intersect(seg!!)) {
                 tracks.add(seg)
             }
         }
@@ -132,11 +130,11 @@ object DragPolygonHelper {
         for (i in 0 until movePoints.size - 1) {
             for (j in 1 until movePoints.size) {
                 val possible = Segment(movePoints[i], movePoints[j])
-                if (GraphicUtils.isSegmentInSegment(opSegment, possible)
-                    && GraphicUtils.getDisPtToPt(possible.end, possible.start) < dis
+                if (opSegment.isContainedBy(possible)
+                    && possible.end.disToPt(possible.start) < dis
                 ) {
                     moveSegment = possible
-                    dis = GraphicUtils.getDisPtToPt(possible.end, possible.start)
+                    dis = possible.end.disToPt(possible.start)
                 }
             }
         }
@@ -181,7 +179,7 @@ object DragPolygonHelper {
                 moveSegment!!, movePoint
             )
         )
-        if (dis < GraphicUtils.float_COM) {
+        if (dis < GraphicUtils.FLOAT_ACCURACY) {
             return null
         }
         for (polygon in oriPolygons) {
@@ -209,10 +207,9 @@ object DragPolygonHelper {
 
     /**
      * 合并图片中所有的能合并的线段
-     * @param polygons
      * @return
      */
-    private fun getAllCombinedSegments(polygons: ArrayList<Polygon>): HashMap<Segment, ArrayList<Segment?>> {
+    private fun getAllCombinedSegments(): HashMap<Segment, ArrayList<Segment?>> {
         val result: HashMap<Segment, ArrayList<Segment?>> = HashMap<Segment, ArrayList<Segment?>>()
 
         //初始化所有边
