@@ -576,8 +576,8 @@ class CollagesView @JvmOverloads constructor(
                 TAG,
                 "Center Crop boundingBox = " + backBitmapItem.getPolygon().boundingBox.toString()
             );
-            Log.i(TAG, backBitmapItem.oriMatrix.toString());
-            Log.i(TAG, backBitmapItem.postMatrix.toString());
+//            Log.i(TAG, backBitmapItem.oriMatrix.toString());
+//            Log.i(TAG, backBitmapItem.postMatrix.toString());
 
             if (isPostMatrixReset) {
                 backBitmapItem.postMatrix.reset()

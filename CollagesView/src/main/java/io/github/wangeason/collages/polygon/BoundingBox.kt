@@ -17,8 +17,8 @@ class BoundingBox {
     }
 
     operator fun contains(pt: Point): Boolean {
-        return pt.x in (xMax + GraphicUtils.FLOAT_ACCURACY)..(xMin - GraphicUtils.FLOAT_ACCURACY) &&
-                pt.y in (yMax + GraphicUtils.FLOAT_ACCURACY)..(yMin - GraphicUtils.FLOAT_ACCURACY)
+        return pt.x in (xMin - GraphicUtils.FLOAT_ACCURACY)..(xMax + GraphicUtils.FLOAT_ACCURACY) &&
+                pt.y in (yMin - GraphicUtils.FLOAT_ACCURACY)..(yMax + GraphicUtils.FLOAT_ACCURACY)
     }
 
 

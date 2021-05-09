@@ -101,7 +101,7 @@ object DragPolygonHelper {
         if (D) {
             val builder = StringBuilder()
             for (seg in tracks) {
-                builder.append(" seg: " + seg.toString())
+                builder.append(" seg: $seg")
             }
             Log.i(TAG, "tracks: $builder")
         }

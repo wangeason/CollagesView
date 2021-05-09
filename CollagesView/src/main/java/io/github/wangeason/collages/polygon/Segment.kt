@@ -139,12 +139,21 @@ class Segment(var start: Point, var end: Point,){
         }
         return intersectPoint
     }
+
+    fun isParallel(seg: Segment): Boolean {
+        return (this.isVertical() && seg.isVertical()) || (this.getA() == seg.getA())
+    }
+
     /**
      *
      * @param segment
      * @return `True` if both lines intersect, otherwise return `False`
      */
     fun intersect(segment: Segment): Boolean {
+//        return GraphicUtils.isTwoPointsOnSameSide(this, segment.end, segment.start) != 1 &&
+//                GraphicUtils.isTwoPointsOnSameSide(segment, this.end, this.start) != 1
+        if (isParallel(segment)) return false
+
         val intersectPoint: Point = this.lineIntersect(segment)
         return this.boundingBox().contains(intersectPoint) &&
                 segment.boundingBox().contains(intersectPoint)

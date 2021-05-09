@@ -9,7 +9,7 @@ import java.util.*
 import kotlin.math.abs
 
 object GraphicUtils {
-    const val FLOAT_ACCURACY = 0.5f
+    const val FLOAT_ACCURACY = 1f
 
     /**
      * 放大缩小倍数限制
