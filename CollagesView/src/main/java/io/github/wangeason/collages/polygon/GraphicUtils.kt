@@ -333,7 +333,17 @@ object GraphicUtils {
         val end: Point = segment.end
         val sidePt = (start.x - end.x) * (pt.y - end.y) - (start.y - end.y) * (pt.x - end.x)
         return abs(sidePt) < FLOAT_ACCURACY
-//        return abs(sidePt) == 0f
+    }
+
+    /**
+     * 判断src是否与track十字相交或者s1有端点在s2上
+     * @param src
+     * @param track
+     * @return
+     */
+    fun isSegmentOnTrack(src: Segment, track: Segment): Boolean {
+        return isTwoPointsOnSameSide(src, track.end, track.start) == -1 &&
+                isTwoPointsOnSameSide(track, src.end, src.start) != 1
     }
 
     /**
@@ -355,11 +365,8 @@ object GraphicUtils {
      * @return
      */
     fun isPointOnSegment(pt: Point, segment: Segment): Boolean {
-        return if (isPointOnLine(pt, segment) &&
+        return isPointOnLine(pt, segment) &&
             segment.boundingBox()!!.contains(pt)
-        ) {
-            true
-        } else false
     }
 
     /**

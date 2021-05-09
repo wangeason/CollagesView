@@ -94,7 +94,7 @@ object DragPolygonHelper {
         //所有与移动边所在的最长线段相交的线段，（可以作为滑动轨道的线段）
         val tracks: ArrayList<Segment> = ArrayList<Segment>()
         for (seg in allComSegments) {
-            if (moveLine.intersect(seg!!)) {
+            if (GraphicUtils.isSegmentOnTrack(moveLine, seg!!)) {
                 tracks.add(seg)
             }
         }
