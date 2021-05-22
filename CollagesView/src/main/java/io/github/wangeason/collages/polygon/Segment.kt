@@ -1,5 +1,9 @@
 package io.github.wangeason.collages.polygon
 
+import java.lang.RuntimeException
+import kotlin.math.abs
+import kotlin.math.sqrt
+
 class Segment(var start: Point, var end: Point,){
 
     private var a = Float.NaN
@@ -15,21 +19,6 @@ class Segment(var start: Point, var end: Point,){
         }
     }
 
-
-    /**
-     * Indicate whereas the point lays on the rectangle of line.
-     *
-     * @param point
-     * - The point to check
-     * @return `True` if the point lays on the line, otherwise return `False`
-     */
-    fun isInside(point: Point): Boolean {
-        val maxX = if (start.x > end.x) start.x else end.x
-        val minX = if (start.x < end.x) start.x else end.x
-        val maxY = if (start.y > end.y) start.y else end.y
-        val minY = if (start.y < end.y) start.y else end.y
-        return point.x in minX..maxX && point.y in minY..maxY
-    }
 
     /**
      * Indicate whereas the line is vertical. <br></br>
@@ -62,19 +51,23 @@ class Segment(var start: Point, var end: Point,){
 
     /**
      * 判断两条线段相等
-     * @param o
+     * @param other
      * @return
      */
-    override fun equals(o: Any?): Boolean {
-        if (this === o) return true
-        if (o !is Segment) return false
-        val segment: Segment = o
-        return if (start == segment.end) {
-            end == segment.start
-        } else if (start == segment.start) {
-            end == segment.end
-        } else {
-            false
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Segment) return false
+        val segment: Segment = other
+        return when (start) {
+            segment.end -> {
+                end == segment.start
+            }
+            segment.start -> {
+                end == segment.end
+            }
+            else -> {
+                false
+            }
         }
     }
 
@@ -87,13 +80,13 @@ class Segment(var start: Point, var end: Point,){
         return result
     }
 
-    fun boundingBox(): BoundingBox? {
-        val _boundingBox = BoundingBox()
-        _boundingBox.xMax = if (end.x > start.x) end.x else start.x
-        _boundingBox.yMax = if (end.y > start.y) end.y else start.y
-        _boundingBox.xMin = if (end.x < start.x) end.x else start.x
-        _boundingBox.yMin = if (end.y < start.y) end.y else start.y
-        return _boundingBox
+    fun boundingBox(): BoundingBox {
+        val boundingBox = BoundingBox()
+        boundingBox.xMax = if (end.x > start.x) end.x else start.x
+        boundingBox.yMax = if (end.y > start.y) end.y else start.y
+        boundingBox.xMin = if (end.x < start.x) end.x else start.x
+        boundingBox.yMin = if (end.y < start.y) end.y else start.y
+        return boundingBox
     }
 
 
@@ -107,7 +100,7 @@ class Segment(var start: Point, var end: Point,){
     }
 
     fun length(): Float {
-        return return Math.sqrt(((start.x - end.x) * (start.x - end.x) + (start.y - end.y) * (start.y - end.y)).toDouble())
+        return sqrt(((start.x - end.x) * (start.x - end.x) + (start.y - end.y) * (start.y - end.y)).toDouble())
             .toFloat()
     }
 
@@ -116,38 +109,89 @@ class Segment(var start: Point, var end: Point,){
     }
 
     /**
-     * By given this and one side of the polygon, check if both lines intersect.
      *
-     * @param this
+     * @param seg
+     * @return the intersection of the two lines, it may not on the both segments
+     * added by wangyansong
+     */
+    fun lineIntersect(seg: Segment): Point {
+        val intersectPoint: Point
+
+        // if both vectors aren't from the kind of x=1 lines then go into
+        if (!this.isVertical() && !seg.isVertical()) {
+            // check if both vectors are parallel. If they are parallel then no intersection point will exist
+            if (this.getA() == seg.getA()) {
+                throw RuntimeException("Two parallel segments have no intersect!!")
+            }
+            val x = (seg.getB() - this.getB()) / (this.getA() - seg.getA()) // x = (b2-b1)/(a1-a2)
+            val y = seg.getA() * x + seg.getB() // y = a2*x+b2
+            intersectPoint = Point(x, y)
+        } else if (this.isVertical() && !seg.isVertical()) {
+            val x: Float = this.start.x
+            val y = seg.getA() * x + seg.getB()
+            intersectPoint = Point(x, y)
+        } else if (!this.isVertical() && seg.isVertical()) {
+            val x: Float = seg.start.x
+            val y = this.getA() * x + this.getB()
+            intersectPoint = Point(x, y)
+        } else {
+            throw RuntimeException("Two vertical segments have no intersect!!")
+        }
+        return intersectPoint
+    }
+
+    fun isParallel(seg: Segment): Boolean {
+        return (this.isVertical() && seg.isVertical()) || (this.getA() == seg.getA())
+    }
+
+    /**
+     *
      * @param segment
      * @return `True` if both lines intersect, otherwise return `False`
      */
     fun intersect(segment: Segment): Boolean {
-        var intersectPoint: Point? = null
+//        return GraphicUtils.isTwoPointsOnSameSide(this, segment.end, segment.start) != 1 &&
+//                GraphicUtils.isTwoPointsOnSameSide(segment, this.end, this.start) != 1
+        if (isParallel(segment)) return false
 
-        // if both vectors aren't from the kind of x=1 lines then go into
-        intersectPoint = if (!this.isVertical() && !segment.isVertical()) {
-            // check if both vectors are parallel. If they are parallel then no intersection point will exist
-            if (this.getA() == segment.getA()) {
-                return false
-            }
-            val x = (segment.getB() - this.getB()) / (this.getA() - segment.getA()) // x = (b2-b1)/(a1-a2)
-            val y = segment.getA() * x + segment.getB() // y = a2*x+b2
-            Point(x, y)
-        } else if (this.isVertical() && !segment.isVertical()) {
-            val x = this.start.x
-            val y = segment.getA() * x + segment.getB()
-            Point(x, y)
-        } else if (!this.isVertical() && segment.isVertical()) {
-            val x = segment.start.x
-            val y = this.getA() * x + this.getB()
-            Point(x, y)
+        val intersectPoint: Point = this.lineIntersect(segment)
+        return this.boundingBox().contains(intersectPoint) &&
+                segment.boundingBox().contains(intersectPoint)
+    }
+
+    /**
+     * 判断两条线段是不是在同一条直线上
+     * @param des
+     * @return
+     */
+    fun isOnSameLineOf(des: Segment): Boolean {
+        return if (this.isVertical() && des.isVertical()) {
+            abs(this.start.x - des.start.x) < GraphicUtils.FLOAT_ACCURACY
+        } else if (!this.isVertical() && !des.isVertical()) {
+            (abs(this.getA() - des.getA()) < GraphicUtils.FLOAT_ACCURACY) && (abs(this.getB() - des.getB()) < GraphicUtils.FLOAT_ACCURACY)
         } else {
-            return false
+            false
         }
+    }
 
-        // System.out.println("this: " + this.toString() + " ,Side: " + side);
-        // System.out.println("Intersect point: " + intersectPoint.toString());
-        return segment.isInside(intersectPoint) && this.isInside(intersectPoint)
+    /**
+     * 判断本线段是不是被des包括
+     * @param des
+     * @return
+     */
+    fun isContainedBy(des: Segment): Boolean {
+        if (this.isOnSameLineOf(des)) {
+            val maxX: Float =
+                if (des.start.x > des.end.x) des.start.x else des.end.x
+            val minX: Float =
+                if (des.start.x < des.end.x) des.start.x else des.end.x
+            val maxY: Float =
+                if (des.start.y > des.end.y) des.start.y else des.end.y
+            val minY: Float =
+                if (des.start.y < des.end.y) des.start.y else des.end.y
+            return ((this.start.x in (minX - GraphicUtils.FLOAT_ACCURACY)..(maxX + GraphicUtils.FLOAT_ACCURACY)) && (this.start.y in (minY - GraphicUtils.FLOAT_ACCURACY)..(maxY + GraphicUtils.FLOAT_ACCURACY))) &&
+                    ((this.end.x in (minX - GraphicUtils.FLOAT_ACCURACY)..(maxX + GraphicUtils.FLOAT_ACCURACY)) && (this.end.y in (minY - GraphicUtils.FLOAT_ACCURACY)..(maxY + GraphicUtils.FLOAT_ACCURACY)))
+        }
+        return false
     }
 }

@@ -2,18 +2,18 @@ package io.github.wangeason.collages.polygon
 
 import android.graphics.Matrix
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 
 class Point(var x: Float,
             var y: Float,) {
 
-    val float_COM = 0.5f
 
     override fun equals(other: Any?): Boolean {
         if (null == other || other !is Point) return false
         if (this === other) return true
         val pt: Point = other
-        return abs(x - pt.x) < float_COM && abs(y - pt.y) < float_COM
+        return abs(x - pt.x) < GraphicUtils.FLOAT_ACCURACY && abs(y - pt.y) < GraphicUtils.FLOAT_ACCURACY
     }
 
     override fun hashCode(): Int {
@@ -51,5 +51,10 @@ class Point(var x: Float,
                 matrix
             )
         return Point(newX, newY)
+    }
+
+    fun disToPt(dest: Point): Float {
+        return sqrt(((this.x - dest.x) * (this.x - dest.x) + (this.y - dest.y) * (this.y - dest.y)).toDouble())
+            .toFloat()
     }
 }
