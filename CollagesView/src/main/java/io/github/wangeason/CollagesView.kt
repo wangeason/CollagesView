@@ -556,17 +556,21 @@ class CollagesView @JvmOverloads constructor(
                     GraphicUtils.getCenterInsideMatrix(
                         backBitmapItem.getPolygon().boundingBox,
                         backBitmapItem.bitmap,
-                        pathWidth
+                        pathWidth,
+                        MAX_SCALE,
+                        MIN_SCALE
                     )
                 )
                 backBitmapItem.isCenterCrop = false
                 backBitmapItem.isCenterInside = true
             } else {
                 backBitmapItem.oriMatrix = (
-                    GraphicUtils.getCenterCropMatrix(
+                    getCenterCropMatrix(
                         backBitmapItem.getPolygon().boundingBox,
                         backBitmapItem.bitmap,
-                        pathWidth
+                        pathWidth,
+                        MAX_SCALE,
+                        MIN_SCALE
                     )
                 )
                 backBitmapItem.isCenterCrop = true
@@ -884,7 +888,9 @@ class CollagesView @JvmOverloads constructor(
                                                 GraphicUtils.getCenterInsideMatrix(
                                                     backBitmapItem.getPolygon().boundingBox,
                                                     backBitmapItem.bitmap,
-                                                    pathWidth
+                                                    pathWidth,
+                                                    MAX_SCALE,
+                                                    MIN_SCALE
                                                 )
                                                 )
                                         backBitmapItem.postMatrix = Matrix()
@@ -892,10 +898,12 @@ class CollagesView @JvmOverloads constructor(
                                         backBitmapItem.isCenterCrop = false
                                     } else {
                                         backBitmapItem.oriMatrix = (
-                                                GraphicUtils.getCenterCropMatrix(
+                                                getCenterCropMatrix(
                                                     backBitmapItem.getPolygon().boundingBox,
                                                     backBitmapItem.bitmap,
-                                                    pathWidth
+                                                    pathWidth,
+                                                    MAX_SCALE,
+                                                    MIN_SCALE
                                                 )
                                                 )
                                         backBitmapItem.postMatrix = (Matrix())
@@ -1452,7 +1460,9 @@ class CollagesView @JvmOverloads constructor(
             backBitmapItem.oriMatrix = getCenterInsideMatrix(
                 backBitmapItem.getPolygon().boundingBox,
                 backBitmapItem.bitmap,
-                pathWidth
+                pathWidth,
+                MAX_SCALE,
+                MIN_SCALE
             )
             backBitmapItem.isCenterCrop = false
             backBitmapItem.isCenterInside = true
@@ -1460,7 +1470,9 @@ class CollagesView @JvmOverloads constructor(
             backBitmapItem.oriMatrix = getCenterCropMatrix(
                 backBitmapItem.getPolygon().boundingBox,
                 backBitmapItem.bitmap,
-                pathWidth
+                pathWidth,
+                MAX_SCALE,
+                MIN_SCALE
             )
             backBitmapItem.isCenterCrop = true
             backBitmapItem.isCenterInside = false
@@ -1948,8 +1960,8 @@ class CollagesView @JvmOverloads constructor(
         /**
          * 放大缩小倍数限制
          */
-        val MAX_SCALE = 4.0f
-        val MIN_SCALE = 0.25f
+        const val MAX_SCALE = 4.0f
+        const val MIN_SCALE = 0.25f
         private val DEFAULT_PATH_WIDTH_DP = 2f
         private val DEFAULT_SELECTOR_WIDTH_DP = 2f
         private val DEFAULT_DRAG_BUTTON_RADIUS_DP = 6f

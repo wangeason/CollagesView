@@ -3,7 +3,6 @@ package io.github.wangeason.collages.polygon
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.util.Log
-import io.github.wangeason.CollagesView
 import io.github.wangeason.collages.model.collage.PathArcPoints
 import java.util.*
 import kotlin.math.abs
@@ -11,18 +10,7 @@ import kotlin.math.abs
 object GraphicUtils {
     const val FLOAT_ACCURACY = 1f
 
-    /**
-     * 放大缩小倍数限制
-     */
-    private val MAX_SCALE: Float = CollagesView.MAX_SCALE
-    private val MIN_SCALE: Float = CollagesView.MIN_SCALE
-
-    /**
-     * 日志状态 DEBUG
-     */
-    private val D: Boolean = CollagesView.DEBUG
-    private const val TAG = "GraphicUtils"
-
+    private val TAG: String = GraphicUtils.toString()
     /**
      * CenterCrop
      * @param boundingBox
@@ -33,15 +21,17 @@ object GraphicUtils {
     fun getCenterCropMatrix(
         boundingBox: BoundingBox,
         bitmap: Bitmap,
-        pathWidth: Float
+        pathWidth: Float,
+        maxScale: Float,
+        minScale: Float
     ): Matrix {
         val matrix = Matrix()
-        var centerCropScale = 1f // 缩放量
+        var centerCropScale: Float
         val scaleX = (boundingBox.xMax - boundingBox.xMin - pathWidth) / bitmap.width
         val scaleY = (boundingBox.yMax - boundingBox.yMin - pathWidth) / bitmap.height
         centerCropScale = if (scaleX > scaleY) scaleX else scaleY
-        centerCropScale = if (centerCropScale > MAX_SCALE) MAX_SCALE else centerCropScale
-        centerCropScale = if (centerCropScale < MIN_SCALE) MIN_SCALE else centerCropScale
+        centerCropScale = if (centerCropScale > maxScale) maxScale else centerCropScale
+        centerCropScale = if (centerCropScale < minScale) minScale else centerCropScale
         matrix.setScale(centerCropScale, centerCropScale)
         matrix.postTranslate(
             (boundingBox.xMax + boundingBox.xMin) / 2 - centerCropScale * bitmap.width / 2,
@@ -59,15 +49,17 @@ object GraphicUtils {
     fun getFitCenterMatrix(
         boundingBox: BoundingBox,
         bitmap: Bitmap,
-        pathWidth: Float
+        pathWidth: Float,
+        maxScale: Float,
+        minScale: Float
     ): Matrix {
         val matrix = Matrix()
-        var fitCenterScale = 1f // 缩放量
+        var fitCenterScale: Float // 缩放量
         val scaleX = (boundingBox.xMax - boundingBox.xMin - pathWidth) / bitmap.width
         val scaleY = (boundingBox.yMax - boundingBox.yMin - pathWidth) / bitmap.height
         fitCenterScale = if (scaleX < scaleY) scaleX else scaleY
-        fitCenterScale = if (fitCenterScale > MAX_SCALE) MAX_SCALE else fitCenterScale
-        fitCenterScale = if (fitCenterScale < MIN_SCALE) MIN_SCALE else fitCenterScale
+        fitCenterScale = if (fitCenterScale > maxScale) maxScale else fitCenterScale
+        fitCenterScale = if (fitCenterScale < minScale) minScale else fitCenterScale
         matrix.setScale(fitCenterScale, fitCenterScale)
         matrix.postTranslate(
             (boundingBox.xMax + boundingBox.xMin) / 2 - fitCenterScale * bitmap.width / 2,
@@ -85,7 +77,9 @@ object GraphicUtils {
     fun getCenterInsideMatrix(
         boundingBox: BoundingBox,
         bitmap: Bitmap,
-        pathWidth: Float
+        pathWidth: Float,
+        maxScale: Float,
+        minScale: Float
     ): Matrix {
         val matrix = Matrix()
         var centerInside = 1f // 缩放量
@@ -94,8 +88,8 @@ object GraphicUtils {
         if (scaleX < 1 || scaleY < 1) {
             centerInside = if (scaleX < scaleY) scaleX else scaleY
         }
-        centerInside = if (centerInside > MAX_SCALE) MAX_SCALE else centerInside
-        centerInside = if (centerInside < MIN_SCALE) MIN_SCALE else centerInside
+        centerInside = if (centerInside > maxScale) maxScale else centerInside
+        centerInside = if (centerInside < minScale) minScale else centerInside
         matrix.setScale(centerInside, centerInside)
         matrix.postTranslate(
             (boundingBox.xMax + boundingBox.xMin) / 2 - centerInside * bitmap.width / 2,
@@ -165,18 +159,22 @@ object GraphicUtils {
      * @return
      */
     fun getDisFromPtToLine(segment: Segment, point: Point): Float {
-        if (segment.isVertical()) {
-            return abs(point.x - segment.start.x)
-        } else if (segment.getA() == 0f) {
-            return abs(point.y - segment.start.y)
-        } else {
-            val a = segment.getA()
-            val b = segment.getB()
-            val sy = a * point.x + b
-            val sx = (point.y - b) / a
-            return abs(
-                (point.y - sy) * (point.x - sx) / Point(point.x, sy).disToPt(Point(sx, point.y))
-            )
+        return when {
+            segment.isVertical() -> {
+                abs(point.x - segment.start.x)
+            }
+            segment.getA() == 0f -> {
+                abs(point.y - segment.start.y)
+            }
+            else -> {
+                val a = segment.getA()
+                val b = segment.getB()
+                val sy = a * point.x + b
+                val sx = (point.y - b) / a
+                abs(
+                    (point.y - sy) * (point.x - sx) / Point(point.x, sy).disToPt(Point(sx, point.y))
+                )
+            }
         }
     }
 
@@ -184,13 +182,10 @@ object GraphicUtils {
      * 获取一定距离远的平行线
      *
      */
-    fun getParallelSegments(src: Segment, dis: Float, results: ArrayList<Segment>?) {
-        var results = results
+    private fun getParallelSegments(src: Segment, dis: Float, results: ArrayList<Segment>) {
         val srcStart: Point = src.start
         val srcEnd: Point = src.end
-        if (results == null) {
-            results = ArrayList()
-        }
+
         if (src.isVertical()) {
             results.add(
                 Segment(
@@ -271,7 +266,7 @@ object GraphicUtils {
             }
 
             //创建缩小的多边形
-            val builder: PolygonBuilder = PolygonBuilder()
+            val builder = PolygonBuilder()
             for (point: Point in vertexes) {
                 builder.addVertex(point)
             }
@@ -366,11 +361,11 @@ object GraphicUtils {
      */
     fun isPointOnSegment(pt: Point, segment: Segment): Boolean {
         return isPointOnLine(pt, segment) &&
-            segment.boundingBox()!!.contains(pt)
+            segment.boundingBox().contains(pt)
     }
 
     /**
-     * 把src合并到des中，如果不成功返回NULL，否则修改des
+     * 把src合并到des中，如果不成功返回NULL
      * @param src
      * @param des
      * @return
@@ -378,7 +373,7 @@ object GraphicUtils {
     fun combine(src: Segment, des: Segment): Segment? {
         //不在一条直线上
         if (!des.isOnSameLineOf(src)) {
-            if (D) Log.i(TAG, "src:$src des:$des")
+            Log.i(TAG, "Not on same line, src:$src des:$des")
             return null
         }
 
@@ -391,9 +386,10 @@ object GraphicUtils {
         }
 
         //不重叠
-        if (!(des.boundingBox().contains(src.end) || des.boundingBox()
-                .contains(src.start))
+        if (!(des.boundingBox().contains(src.end) || des.boundingBox().contains(src.start))
+            || !(src.boundingBox().contains(des.end) || src.boundingBox().contains(des.start))
         ) {
+            Log.i(TAG, "Not connected, src:$src des:$des")
             return null
         }
 
@@ -444,15 +440,14 @@ object GraphicUtils {
                 break
             }
         }
-        if (D) {
-            Log.i(
-                "GraphicUtils",
-                "movingSide:$moveSegment polygon sides: " + result.sides[0].toString()
-                    .toString() + " " + result.sides[1].toString()
-                    .toString() + " " + result.sides[2].toString()
-                    .toString() + " " + result.sides[3].toString()
-            )
-        }
+
+        Log.d(
+            TAG,
+            "movingSide:$moveSegment polygon sides: " + result.sides[0].toString() + " " +
+                    result.sides[1].toString() + " " +
+                    result.sides[2].toString() + " " +
+                    result.sides[3].toString()
+        )
 
 
         //与被移动的边相交的边

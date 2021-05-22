@@ -7,7 +7,7 @@ class BoundingBox {
     var yMax = Float.NEGATIVE_INFINITY
     var yMin = Float.NEGATIVE_INFINITY
 
-    constructor() {}
+    constructor()
 
     constructor(src: BoundingBox) {
         xMin = src.xMin
@@ -22,10 +22,10 @@ class BoundingBox {
     }
 
 
-    override fun equals(o: Any?): Boolean {
-        if (this === o) return true
-        if (o !is BoundingBox) return false
-        return !(xMax != o.xMax || xMin != o.xMin || yMax != o.yMax || yMin != o.yMin)
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BoundingBox) return false
+        return !(xMax != other.xMax || xMin != other.xMin || yMax != other.yMax || yMin != other.yMin)
     }
 
     override fun hashCode(): Int {
